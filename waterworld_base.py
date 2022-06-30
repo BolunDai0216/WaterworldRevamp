@@ -74,15 +74,12 @@ class WaterworldBase:
     def add(self):
         for obj_list in [self.pursuers, self.evaders, self.poisons, self.obstacles]:
             for obj in obj_list:
-                self.space.add(obj.body, obj.shape)
+                obj.add(self.space)
 
     def draw(self):
         for obj_list in [self.pursuers, self.evaders, self.poisons, self.obstacles]:
             for obj in obj_list:
-                pos = obj.body.position
-                pygame.draw.circle(
-                    self.display, obj.color, self.convert_coordinates(pos), obj.radius
-                )
+                obj.draw(self.display, self.convert_coordinates)
 
     def reset(self):
         pass
@@ -93,7 +90,7 @@ class WaterworldBase:
 
 class Obstacle:
     def __init__(self, x, y, category=1, mask=1, pixel_scale=750, radius=0.1):
-        self.body = pymunk.Body(pymunk.Body.STATIC)
+        self.body = pymunk.Body(0, 0, pymunk.Body.STATIC)
         self.body.position = x, y
 
         self.shape = pymunk.Circle(self.body, pixel_scale * 0.1)
@@ -103,6 +100,14 @@ class Obstacle:
 
         self.radius = radius * pixel_scale
         self.color = (120, 176, 178)
+
+    def add(self, space):
+        space.add(self.body, self.shape)
+
+    def draw(self, display, convert_coordinates):
+        pygame.draw.circle(
+            display, self.color, convert_coordinates(self.body.position), self.radius
+        )
 
 
 class MovingObject:
@@ -118,6 +123,14 @@ class MovingObject:
 
         self.radius = radius * pixel_scale
 
+    def add(self, space):
+        space.add(self.body, self.shape)
+
+    def draw(self, display, convert_coordinates):
+        pygame.draw.circle(
+            display, self.color, convert_coordinates(self.body.position), self.radius
+        )
+
 
 class Pursuers(MovingObject):
     def __init__(self, x, y, category=1, mask=1, radius=0.015):
@@ -131,6 +144,26 @@ class Evaders(MovingObject):
         super().__init__(x, y, category, mask, radius=radius)
 
         self.color = (238, 116, 106)
+
+        w, h = 1, 40
+        vertices = [(-w / 2, -h / 2), (w / 2, -h / 2), (w / 2, h / 2), (-w / 2, h / 2)]
+        t = pymunk.Transform(tx=w / 2, ty=h / 2)
+        self.sensor = pymunk.Poly(self.body, vertices, transform=t)
+        self.sensor.sensor = True
+
+    def add(self, space):
+        space.add(self.body, self.shape, self.sensor)
+
+    def draw(self, display, convert_coordinates):
+        pygame.draw.circle(
+            display, self.color, convert_coordinates(self.body.position), self.radius
+        )
+
+        world_vertices = []
+        for v in self.sensor.get_vertices():
+            world_coord = v + self.body.position
+            world_vertices.append(convert_coordinates(world_coord))
+        pygame.draw.polygon(display, self.color, world_vertices)
 
 
 class Poisons(MovingObject):
@@ -153,6 +186,7 @@ def main():
         pygame.display.update()
         base.clock.tick(base.FPS)
         base.space.step(1 / base.FPS)
+        # set_trace()
 
     pygame.quit()
 
