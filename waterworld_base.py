@@ -70,7 +70,7 @@ class WaterworldBase:
                 Pursuers(
                     random.randint(0, self.pixel_scale),
                     random.randint(0, self.pixel_scale),
-                    collision_type=i
+                    collision_type=i+1
                 )
             )
 
@@ -113,6 +113,9 @@ class WaterworldBase:
             for obj_list in [self.evaders, self.poisons]:
                 for obj in obj_list:
                     self.handlers.append(self.space.add_collision_handler(pursuer.shape.collision_type, obj.shape.collision_type))
+        for poison in self.poisons:
+            for evader in self.evaders:
+                self.handlers.append(self.space.add_collision_handler(poison.shape.collision_type, evader.shape.collision_type))
 
     def reset(self):
         pass
