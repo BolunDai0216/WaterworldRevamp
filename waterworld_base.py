@@ -1,8 +1,9 @@
 import random
+from pdb import set_trace
 
+import numpy as np
 import pygame
 import pymunk
-import numpy as np
 
 
 class WaterworldBase:
@@ -21,7 +22,7 @@ class WaterworldBase:
         # self.handler_PP = self.space.add_collision_handler(1, 3)
         # Collision handler for collisions between Evaders and Poisons
         # self.handler_EP = self.space.add_collision_handler(2, 3)
-        
+
         # self.handler_PE.begin = self.return_false
         # self.handler_EP.begin = self.return_false
         # self.handler_PP.begin = self.return_false
@@ -53,7 +54,7 @@ class WaterworldBase:
 
         for i, handler in enumerate(self.handlers):
             handler.begin = self.return_false
-            
+
             if i < self.n_pursuers * self.n_evaders:
                 handler.separate = self.Pursuer_Evader_Collision
             else:
@@ -70,7 +71,7 @@ class WaterworldBase:
                 Pursuers(
                     random.randint(0, self.pixel_scale),
                     random.randint(0, self.pixel_scale),
-                    collision_type=i+1
+                    collision_type=i + 1,
                 )
             )
 
@@ -79,7 +80,7 @@ class WaterworldBase:
                 Evaders(
                     random.randint(0, self.pixel_scale),
                     random.randint(0, self.pixel_scale),
-                    collision_type=i+1000
+                    collision_type=i + 1000,
                 )
             )
 
@@ -88,7 +89,7 @@ class WaterworldBase:
                 Poisons(
                     random.randint(0, self.pixel_scale),
                     random.randint(0, self.pixel_scale),
-                    collision_type=i+2000
+                    collision_type=i + 2000,
                 )
             )
 
@@ -112,10 +113,18 @@ class WaterworldBase:
         for pursuer in self.pursuers:
             for obj_list in [self.evaders, self.poisons]:
                 for obj in obj_list:
-                    self.handlers.append(self.space.add_collision_handler(pursuer.shape.collision_type, obj.shape.collision_type))
+                    self.handlers.append(
+                        self.space.add_collision_handler(
+                            pursuer.shape.collision_type, obj.shape.collision_type
+                        )
+                    )
         for poison in self.poisons:
             for evader in self.evaders:
-                self.handlers.append(self.space.add_collision_handler(poison.shape.collision_type, evader.shape.collision_type))
+                self.handlers.append(
+                    self.space.add_collision_handler(
+                        poison.shape.collision_type, evader.shape.collision_type
+                    )
+                )
 
     def reset(self):
         pass
@@ -131,6 +140,7 @@ class WaterworldBase:
 
     def Pursuer_Poison_Collision(self, arbiter, space, data):
         print("Oh no")
+
 
 class Obstacle:
     def __init__(self, x, y, pixel_scale=750, radius=0.1):
@@ -153,7 +163,7 @@ class Obstacle:
         )
 
 
-class MovingObject():
+class MovingObject:
     def __init__(self, x, y, pixel_scale=750, radius=0.015):
         self.pixel_scale = 30 * 25
         self.body = pymunk.Body()
@@ -174,34 +184,59 @@ class MovingObject():
             display, self.color, convert_coordinates(self.body.position), self.radius
         )
 
+
 class Pursuers(MovingObject):
-    def __init__(self, x, y, radius=0.015, _n_sensors=30, _sensor_range=0.2, collision_type=1):
+    def __init__(
+        self, x, y, radius=0.015, _n_sensors=30, _sensor_range=0.2, collision_type=1
+    ):
         super().__init__(x, y, radius=radius)
 
         self.color = (101, 104, 249)
         self.shape.collision_type = collision_type
         self.sensor_color = (0, 0, 0)
         self._n_sensors = _n_sensors
-        self._sensor_range = _sensor_range
+        self._sensor_range = _sensor_range * self.pixel_scale
 
         # Generate self._n_sensors angles, evenly spaced from 0 to 2pi
         # We generate 1 extra angle and remove it because linspace[0] = 0 = 2pi = linspace[-1]
-        angles = np.linspace(0., 2. * np.pi, self._n_sensors + 1)[:-1]
+        angles = np.linspace(0.0, 2.0 * np.pi, self._n_sensors + 1)[:-1]
         # Convert angles to x-y coordinates
         sensor_vectors = np.c_[np.cos(angles), np.sin(angles)]
         self._sensors = sensor_vectors
-
 
     def draw(self, display, convert_coordinates):
         self.center = convert_coordinates(self.body.position)
         for sensor in self._sensors:
             start = self.center
-            end = self.center + self.pixel_scale * (self._sensor_range * sensor)
+            end = self.center + self._sensor_range * sensor
             pygame.draw.line(display, self.sensor_color, start, end, 1)
 
-        pygame.draw.circle(
-            display, self.color, self.center, self.radius
+        pygame.draw.circle(display, self.color, self.center, self.radius)
+
+    def get_sensor_reading(
+        self, object_coord, object_radius, object_velocity, convert_coordinates
+    ):
+        # Get location of pursuer
+        self.center = convert_coordinates(self.body.position)
+
+        # Get distance of object in local frame as a 2x1 numpy array
+        distance_vec = np.array(
+            [[object_coord[0] - self.center[0]], [object_coord[1] - self.center[1]]]
         )
+        distance_squared = np.sum(distance_vec**2)
+
+        sensor_distances = self._sensors @ distance_vec
+
+        wrong_direction_idx = sensor_distances < 0
+        out_of_range_idx = sensor_distances - object_radius > self._sensor_range
+        no_intersection_idx = (
+            distance_squared - sensor_distances**2 > object_radius**2
+        )
+        not_sensed_idx = wrong_direction_idx | out_of_range_idx | no_intersection_idx
+        sensor_distances[not_sensed_idx] = np.inf
+
+        return sensor_distances
+
 
 class Evaders(MovingObject):
     def __init__(self, x, y, radius=0.03, collision_type=2):
@@ -221,15 +256,15 @@ class Evaders(MovingObject):
         space.add(self.body, self.shape)
 
     # def draw(self, display, convert_coordinates):
-        # pygame.draw.circle(
-            # display, self.color, convert_coordinates(self.body.position), self.radius
-        # )
+    # pygame.draw.circle(
+    # display, self.color, convert_coordinates(self.body.position), self.radius
+    # )
 
-        # world_vertices = []
-        # for v in self.sensor.get_vertices():
-            # world_coord = v + self.body.position
-            # world_vertices.append(convert_coordinates(world_coord))
-        # pygame.draw.polygon(display, self.color, world_vertices)
+    # world_vertices = []
+    # for v in self.sensor.get_vertices():
+    # world_coord = v + self.body.position
+    # world_vertices.append(convert_coordinates(world_coord))
+    # pygame.draw.polygon(display, self.color, world_vertices)
 
 
 class Poisons(MovingObject):
@@ -253,7 +288,20 @@ def main():
         pygame.display.update()
         base.clock.tick(base.FPS)
         base.space.step(1 / base.FPS)
-        # set_trace()
+
+        for p in base.pursuers:
+            _p_sensor_vals = []
+            for e in base.evaders:
+                e_coord = base.convert_coordinates(e.body.position)
+                p_coord = base.convert_coordinates(p.body.position)
+
+                sensor_distance_e = p.get_sensor_reading(
+                    e_coord, e.radius, 0.0, base.convert_coordinates
+                )
+                _p_sensor_vals.append(sensor_distance_e)
+            p_sensor_vals = np.amin(np.concatenate(_p_sensor_vals, axis=1), axis=1)
+            # print(p_sensor_vals)
+            # set_trace()
 
     pygame.quit()
 
