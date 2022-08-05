@@ -54,12 +54,20 @@ class WaterworldBase:
             self.space.add(seg)
 
         for i, handler in enumerate(self.handlers):
-            if i < self.n_pursuers * self.n_evaders:
-                handler.begin = self.pursuer_evader_begin_callback
-                handler.separate = self.pursuer_evader_separate_callback
-            else:
-                handler.begin = self.return_false
-                handler.separate = self.Pursuer_Poison_Collision
+            handler.begin = self.return_false
+
+        for i in range(self.n_pursuers):
+            for j in range(self.n_evaders):
+                idx = i * 15 + j
+                self.handlers[idx].begin = self.pursuer_evader_begin_callback
+                self.handlers[idx].separate = self.pursuer_evader_separate_callback
+
+        # if i < self.n_pursuers * self.n_evaders:
+        #     handler.begin = self.pursuer_evader_begin_callback
+        #     handler.separate = self.pursuer_evader_separate_callback
+        # else:
+        #     handler.begin = self.return_false
+        #     handler.separate = self.Pursuer_Poison_Collision
 
     def add_obj(self):
         self.pursuers = []
@@ -119,6 +127,7 @@ class WaterworldBase:
                             pursuer.shape.collision_type, obj.shape.collision_type
                         )
                     )
+                    # self.handlers.append(obj.shape.collision_type)
         for poison in self.poisons:
             for evader in self.evaders:
                 self.handlers.append(
@@ -126,6 +135,7 @@ class WaterworldBase:
                         poison.shape.collision_type, evader.shape.collision_type
                     )
                 )
+                # self.handlers.append(evader.shape.collision_type)
 
     def reset(self):
         pass
@@ -145,8 +155,8 @@ class WaterworldBase:
         pass
 
     def pursuer_evader_begin_callback(self, arbiter, space, data):
-        set_trace()
         pursuer_shape, evader_shape = arbiter.shapes
+        # set_trace()
 
         # Add one collision to evader
         evader_shape.counter += 1
@@ -161,7 +171,7 @@ class WaterworldBase:
             evader_shape.counter -= 1
         else:
             evader_shape.counter = 0
-            print(" === Eaten === ")
+            evader_shape.reset_position()
 
 
 class Obstacle:
@@ -274,6 +284,7 @@ class Evaders(MovingObject):
         self.color = (238, 116, 106)
         self.shape.collision_type = collision_type
         self.shape.counter = 0
+        self.shape.reset_position = self.reset_position
 
         # w, h = 1, 40
         # vertices = [(-w / 2, -h / 2), (w / 2, -h / 2), (w / 2, h / 2), (-w / 2, h / 2)]
@@ -284,6 +295,9 @@ class Evaders(MovingObject):
     def add(self, space):
         # space.add(self.body, self.shape, self.sensor)
         space.add(self.body, self.shape)
+
+    def reset_position(self):
+        self.body.position = 12, 12
 
     # def draw(self, display, convert_coordinates):
     # pygame.draw.circle(
