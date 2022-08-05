@@ -35,6 +35,7 @@ class WaterworldBase:
         self.n_evaders = n_evaders
         self.n_poisons = n_poisons
         self.n_obstacles = n_obstacles
+        self.n_coop = 1
 
         self.add_obj()
         self.add()
@@ -53,11 +54,11 @@ class WaterworldBase:
             self.space.add(seg)
 
         for i, handler in enumerate(self.handlers):
-            handler.begin = self.return_false
-
             if i < self.n_pursuers * self.n_evaders:
-                handler.separate = self.Pursuer_Evader_Collision
+                handler.begin = self.pursuer_evader_begin_callback
+                handler.separate = self.pursuer_evader_separate_callback
             else:
+                handler.begin = self.return_false
                 handler.separate = self.Pursuer_Poison_Collision
 
     def add_obj(self):
@@ -136,11 +137,31 @@ class WaterworldBase:
         return False
 
     def Pursuer_Evader_Collision(self, arbiter, space, data):
-        print("Ta Daa")
-        # set_trace()
+        # print("Ta Daa")
+        pass
 
     def Pursuer_Poison_Collision(self, arbiter, space, data):
-        print("Oh no")
+        # print("Oh no")
+        pass
+
+    def pursuer_evader_begin_callback(self, arbiter, space, data):
+        set_trace()
+        pursuer_shape, evader_shape = arbiter.shapes
+
+        # Add one collision to evader
+        evader_shape.counter += 1
+
+        return False
+
+    def pursuer_evader_separate_callback(self, arbiter, space, data):
+        pursuer_shape, evader_shape = arbiter.shapes
+
+        if evader_shape.counter < self.n_coop:
+            # Remove one collision to evader
+            evader_shape.counter -= 1
+        else:
+            evader_shape.counter = 0
+            print(" === Eaten === ")
 
 
 class Obstacle:
@@ -151,6 +172,7 @@ class Obstacle:
         self.shape = pymunk.Circle(self.body, pixel_scale * 0.1)
         self.shape.density = 1
         self.shape.elasticity = 1
+        self.shape.custom_value = 1
 
         self.radius = radius * pixel_scale
         self.color = (120, 176, 178)
@@ -174,6 +196,7 @@ class MovingObject:
         self.shape = pymunk.Circle(self.body, pixel_scale * radius)
         self.shape.elasticity = 1
         self.shape.density = 1
+        self.shape.custom_value = 1
 
         self.radius = radius * pixel_scale
 
@@ -250,6 +273,7 @@ class Evaders(MovingObject):
 
         self.color = (238, 116, 106)
         self.shape.collision_type = collision_type
+        self.shape.counter = 0
 
         # w, h = 1, 40
         # vertices = [(-w / 2, -h / 2), (w / 2, -h / 2), (w / 2, h / 2), (-w / 2, h / 2)]
