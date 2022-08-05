@@ -137,6 +137,7 @@ class WaterworldBase:
 
     def Pursuer_Evader_Collision(self, arbiter, space, data):
         print("Ta Daa")
+        # set_trace()
 
     def Pursuer_Poison_Collision(self, arbiter, space, data):
         print("Oh no")
@@ -203,6 +204,7 @@ class Pursuers(MovingObject):
         # Convert angles to x-y coordinates
         sensor_vectors = np.c_[np.cos(angles), np.sin(angles)]
         self._sensors = sensor_vectors
+        self.shape.custom_value = 1
 
     def draw(self, display, convert_coordinates):
         self.center = convert_coordinates(self.body.position)
@@ -225,14 +227,18 @@ class Pursuers(MovingObject):
         )
         distance_squared = np.sum(distance_vec**2)
 
+        # Project distance to sensor vectors
         sensor_distances = self._sensors @ distance_vec
 
+        # Check for valid detection criterions
         wrong_direction_idx = sensor_distances < 0
         out_of_range_idx = sensor_distances - object_radius > self._sensor_range
         no_intersection_idx = (
             distance_squared - sensor_distances**2 > object_radius**2
         )
         not_sensed_idx = wrong_direction_idx | out_of_range_idx | no_intersection_idx
+
+        # Set not sensed sensor readings to inf
         sensor_distances[not_sensed_idx] = np.inf
 
         return sensor_distances
@@ -300,8 +306,7 @@ def main():
                 )
                 _p_sensor_vals.append(sensor_distance_e)
             p_sensor_vals = np.amin(np.concatenate(_p_sensor_vals, axis=1), axis=1)
-            # print(p_sensor_vals)
-            # set_trace()
+        # set_trace()
 
     pygame.quit()
 
