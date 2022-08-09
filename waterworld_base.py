@@ -141,6 +141,17 @@ class WaterworldBase:
                     )
                     self.handlers[-1].begin = self.return_false_begin_callback
 
+        for i in range(self.n_pursuers):
+            for j in range(i, self.n_pursuers):
+                if not i == j:
+                    self.handlers.append(
+                        self.space.add_collision_handler(
+                            self.pursuers[i].shape.collision_type,
+                            self.pursuers[j].shape.collision_type,
+                        )
+                    )
+                    self.handlers[-1].begin = self.return_false_begin_callback
+
     def reset(self):
         pass
 
