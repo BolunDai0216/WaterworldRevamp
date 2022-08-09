@@ -117,7 +117,29 @@ class WaterworldBase:
                         poison.shape.collision_type, evader.shape.collision_type
                     )
                 )
-                self.handlers[-1].begin = self.evader_poison_begin_callback
+                self.handlers[-1].begin = self.return_false_begin_callback
+
+        for i in range(self.n_evaders):
+            for j in range(i, self.n_evaders):
+                if not i == j:
+                    self.handlers.append(
+                        self.space.add_collision_handler(
+                            self.evaders[i].shape.collision_type,
+                            self.evaders[j].shape.collision_type,
+                        )
+                    )
+                    self.handlers[-1].begin = self.return_false_begin_callback
+
+        for i in range(self.n_poisons):
+            for j in range(i, self.n_poisons):
+                if not i == j:
+                    self.handlers.append(
+                        self.space.add_collision_handler(
+                            self.poisons[i].shape.collision_type,
+                            self.poisons[j].shape.collision_type,
+                        )
+                    )
+                    self.handlers[-1].begin = self.return_false_begin_callback
 
     def reset(self):
         pass
@@ -147,7 +169,7 @@ class WaterworldBase:
         pursuer_shape, evader_shape = arbiter.shapes
 
         if evader_shape.counter < self.n_coop:
-            # Remove one collision to evader
+            # Remove one collision from evader
             evader_shape.counter -= 1
         else:
             evader_shape.counter = 0
@@ -155,7 +177,7 @@ class WaterworldBase:
             # For giving reward to pursuer
             pursuer_shape.food_indicator += 1
 
-    def evader_poison_begin_callback(self, arbiter, space, data):
+    def return_false_begin_callback(self, arbiter, space, data):
         return False
 
 
