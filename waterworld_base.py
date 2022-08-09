@@ -117,6 +117,7 @@ class WaterworldBase:
                         poison.shape.collision_type, evader.shape.collision_type
                     )
                 )
+                self.handlers[-1].begin = self.evader_poison_begin_callback
 
     def reset(self):
         pass
@@ -153,6 +154,9 @@ class WaterworldBase:
 
             # For giving reward to pursuer
             pursuer_shape.food_indicator += 1
+
+    def evader_poison_begin_callback(self, arbiter, space, data):
+        return False
 
 
 class Obstacle:
