@@ -41,12 +41,12 @@ class WaterworldBase:
 
         for i in range(self.n_pursuers):
             for j in range(self.n_evaders):
-                idx = i * 15 + j
+                idx = i * (self.n_evaders + self.n_poisons) + j
                 self.handlers[idx].begin = self.pursuer_evader_begin_callback
                 self.handlers[idx].separate = self.pursuer_evader_separate_callback
 
             for k in range(self.n_poisons):
-                idx = i * 15 + self.n_evaders + k
+                idx = i * (self.n_evaders + self.n_poisons) + self.n_evaders + k
                 self.handlers[idx].begin = self.pursuer_poison_begin_callback
 
     def add_obj(self):
@@ -163,7 +163,6 @@ class WaterworldBase:
 
         # Add one collision to evader
         evader_shape.counter += 1
-        evader_shape.reset_position()
 
         return False
 
@@ -187,6 +186,8 @@ class WaterworldBase:
 
             # For giving reward to pursuer
             pursuer_shape.food_indicator += 1
+
+            evader_shape.reset_position()
 
     def return_false_begin_callback(self, arbiter, space, data):
         return False
