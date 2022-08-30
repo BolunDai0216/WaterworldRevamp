@@ -9,7 +9,42 @@ from scipy.spatial import distance as ssd
 
 
 class WaterworldBase:
-    def __init__(self, n_pursuers=5, n_evaders=5, n_poisons=10, n_obstacles=1):
+    def __init__(
+        self,
+        n_pursuers=5,
+        n_evaders=5,
+        n_poisons=10,
+        n_obstacles=1,
+        n_coop=1,
+        n_sensors=30,
+        sensor_range=0.2,
+        radius=0.015,
+        obstacle_radius=0.2,
+        obstacle_coord=(0.5, 0.5),
+        pursuer_max_accel=0.01,
+        evader_speed=0.01,
+        poison_speed=0.01,
+        poison_reward=-1.0,
+        food_reward=10.0,
+        encounter_reward=0.01,
+        thrust_penalty=-0.5,
+        local_ratio=1.0,
+        speed_features=True,
+        max_cycles=500,
+    ):
+        """
+        ╭──────────────────────────────────────────────────────────────────────────────────────────────────────╮
+        │Input keyword arguments                                                                               │
+        ├──────────────────────────────────────────────────────────────────────────────────────────────────────┤
+        │n_pursuers: number of pursuing archea (agents)                                                        │
+        │n_evaders: number of evader archea (food)                                                             │
+        │n_poisons: number of poison archea                                                                    │
+        │n_obstacles: number of obstacles                                                                      │
+        │n_coop: number of pursuing archea (agents) that must be touching food at the same time to consume it  │
+        │n_sensors: number of sensors on each of the pursuing archea (agents)                                  │
+        │sensor_range: length of sensor dendrite on all pursuing archea (agents)                               │
+        ╰──────────────────────────────────────────────────────────────────────────────────────────────────────╯
+        """
         pygame.init()
         self.pixel_scale = 30 * 25
 
@@ -23,7 +58,9 @@ class WaterworldBase:
         self.n_evaders = n_evaders
         self.n_poisons = n_poisons
         self.n_obstacles = n_obstacles
-        self.n_coop = 1
+        self.n_coop = n_coop
+        self.n_sensors = n_sensors
+        self.sensor_range = sensor_range
 
         self.add_obj()
         self.add()
@@ -69,6 +106,8 @@ class WaterworldBase:
                     random.randint(0, self.pixel_scale),
                     random.randint(0, self.pixel_scale),
                     collision_type=i + 1,
+                    _n_sensors=self.n_sensors,
+                    _sensor_range=self.sensor_range,
                 )
             )
 
