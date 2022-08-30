@@ -4,6 +4,8 @@ from pdb import set_trace
 import numpy as np
 import pygame
 import pymunk
+from gym.utils import seeding
+from scipy.spatial import distance as ssd
 
 
 class WaterworldBase:
@@ -49,6 +51,12 @@ class WaterworldBase:
                 idx = i * (self.n_evaders + self.n_poisons) + self.n_evaders + k
                 self.handlers[idx].begin = self.pursuer_poison_begin_callback
 
+        self.seed()
+
+    def seed(self, seed=None):
+        self.np_random, seed = seeding.np_random(seed)
+        return [seed]
+
     def add_obj(self):
         self.pursuers = []
         self.evaders = []
@@ -91,6 +99,25 @@ class WaterworldBase:
         if option == "velocity":
             return value[0], -value[1]
 
+    def _generate_coord(self, radius):
+        coord = self.np_random.rand(2) * self.pixel_scale
+
+        # Create random coordinate that avoids obstacles
+        for obstacle in self.obstacles:
+            x, y = obstacle.body.position
+            while (
+                ssd.cdist(coord[None, :], np.array([[x, y]]))
+                <= radius * 2 + obstacle.radius
+            ):
+                coord = self.np_random.rand(2)
+
+        return coord
+
+    def _generate_speed(self, speed):
+        _speed = (self.np_random.rand(2) - 0.5) * 2 * speed
+
+        return _speed[0], _speed[1]
+
     def add(self):
         for obj_list in [self.pursuers, self.evaders, self.poisons, self.obstacles]:
             for obj in obj_list:
@@ -102,6 +129,7 @@ class WaterworldBase:
                 obj.draw(self.display, self.convert_coordinates)
 
     def add_handlers(self):
+        # Collision handlers for pursuers v.s. evaders & poisons
         for pursuer in self.pursuers:
             for obj_list in [self.evaders, self.poisons]:
                 for obj in obj_list:
@@ -110,6 +138,8 @@ class WaterworldBase:
                             pursuer.shape.collision_type, obj.shape.collision_type
                         )
                     )
+
+        # Collision handlers for poisons v.s. evaders
         for poison in self.poisons:
             for evader in self.evaders:
                 self.handlers.append(
@@ -119,6 +149,7 @@ class WaterworldBase:
                 )
                 self.handlers[-1].begin = self.return_false_begin_callback
 
+        # Collision handlers for evaders v.s. evaders
         for i in range(self.n_evaders):
             for j in range(i, self.n_evaders):
                 if not i == j:
@@ -130,6 +161,7 @@ class WaterworldBase:
                     )
                     self.handlers[-1].begin = self.return_false_begin_callback
 
+        # Collision handlers for poisons v.s. poisons
         for i in range(self.n_poisons):
             for j in range(i, self.n_poisons):
                 if not i == j:
@@ -141,6 +173,7 @@ class WaterworldBase:
                     )
                     self.handlers[-1].begin = self.return_false_begin_callback
 
+        # Collision handlers for pursuers v.s. pursuers
         for i in range(self.n_pursuers):
             for j in range(i, self.n_pursuers):
                 if not i == j:
@@ -158,24 +191,53 @@ class WaterworldBase:
     def step(self):
         pass
 
+    def pursuer_poison_begin_callback(self, arbiter, space, data):
+        """
+        Called when a collision between a pursuer and a poison occurs.
+
+        The poison indicator of the pursuer becomes 1, the pursuer gets
+        a penalty for this step.
+        """
+        pursuer_shape, poison_shape = arbiter.shapes
+
+        # For giving reward to pursuer
+        pursuer_shape.poison_indicator += 1
+
+        # Reset poision position & velocity
+        x, y = self._generate_coord(poison_shape.radius)
+        vx, vy = self._generate_speed(poison_shape.max_speed)
+
+        poison_shape.reset_position(x, y)
+        poison_shape.reset_velocity(vx, vy)
+
+        return False
+
     def pursuer_evader_begin_callback(self, arbiter, space, data):
+        """
+        Called when a collision between a pursuer and an evader occurs.
+
+        The counter of the evader increases by 1, if the counter reaches
+        n_coop, then the pursuer catches the evader and gets a reward.
+        """
         pursuer_shape, evader_shape = arbiter.shapes
 
         # Add one collision to evader
         evader_shape.counter += 1
 
-        return False
-
-    def pursuer_poison_begin_callback(self, arbiter, space, data):
-        pursuer_shape, poison_shape = arbiter.shapes
-
-        # For giving reward to pursuer
-        pursuer_shape.poison_indicator += 1
-        poison_shape.reset_position()
+        if evader_shape.counter >= self.n_coop:
+            # For giving reward to pursuer
+            pursuer_shape.food_indicator = 1
 
         return False
 
     def pursuer_evader_separate_callback(self, arbiter, space, data):
+        """
+        Called when a collision between a pursuer and a poison ends.
+
+        If at this moment there are greater or equal then n_coop pursuers
+        that collides with this evader, the evader's position gets reset
+        and the pursuers involved will be rewarded.
+        """
         pursuer_shape, evader_shape = arbiter.shapes
 
         if evader_shape.counter < self.n_coop:
@@ -185,11 +247,19 @@ class WaterworldBase:
             evader_shape.counter = 0
 
             # For giving reward to pursuer
-            pursuer_shape.food_indicator += 1
+            pursuer_shape.food_indicator = 1
 
-            evader_shape.reset_position()
+            # Reset evader position & velocity
+            x, y = self._generate_coord(evader_shape.radius)
+            vx, vy = self._generate_speed(evader_shape.max_speed)
+
+            evader_shape.reset_position(x, y)
+            evader_shape.reset_velocity(vx, vy)
 
     def return_false_begin_callback(self, arbiter, space, data):
+        """
+        Callback function that simply returns False.
+        """
         return False
 
 
@@ -227,6 +297,9 @@ class MovingObject:
         self.shape.density = 1
         self.shape.custom_value = 1
 
+        self.shape.reset_position = self.reset_position
+        self.shape.reset_velocity = self.reset_velocity
+
         self.radius = radius * pixel_scale
 
     def add(self, space):
@@ -236,6 +309,31 @@ class MovingObject:
         pygame.draw.circle(
             display, self.color, convert_coordinates(self.body.position), self.radius
         )
+
+    def reset_position(self, x, y):
+        self.body.position = x, y
+
+    def reset_velocity(self, vx, vy):
+        self.body.velocity = vx, vy
+
+
+class Evaders(MovingObject):
+    def __init__(self, x, y, radius=0.03, collision_type=2, max_speed=100):
+        super().__init__(x, y, radius=radius)
+
+        self.color = (238, 116, 106)
+        self.shape.collision_type = collision_type
+        self.shape.counter = 0
+        self.shape.max_speed = max_speed
+
+
+class Poisons(MovingObject):
+    def __init__(self, x, y, radius=0.015 * 3 / 4, collision_type=3, max_speed=100):
+        super().__init__(x, y, radius=radius)
+
+        self.color = (145, 250, 116)
+        self.shape.collision_type = collision_type
+        self.shape.max_speed = max_speed
 
 
 class Pursuers(MovingObject):
@@ -272,7 +370,7 @@ class Pursuers(MovingObject):
     def get_sensor_reading(
         self, object_coord, object_radius, object_velocity, convert_coordinates
     ):
-        # Get location of pursuer
+        # Get location and velocity of pursuer
         self.center = convert_coordinates(self.body.position)
         self.velocity = convert_coordinates(self.body.velocity, option="velocity")
 
@@ -311,34 +409,6 @@ class Pursuers(MovingObject):
         sensor_velocities[not_sensed_idx] = 0.0
 
         return sensor_distances, sensor_velocities
-
-
-class Evaders(MovingObject):
-    def __init__(self, x, y, radius=0.03, collision_type=2):
-        super().__init__(x, y, radius=radius)
-
-        self.color = (238, 116, 106)
-        self.shape.collision_type = collision_type
-        self.shape.counter = 0
-        self.shape.reset_position = self.reset_position
-
-    def add(self, space):
-        space.add(self.body, self.shape)
-
-    def reset_position(self):
-        self.body.position = 12, 12
-
-
-class Poisons(MovingObject):
-    def __init__(self, x, y, radius=0.015 * 3 / 4, collision_type=3):
-        super().__init__(x, y, radius=radius)
-
-        self.color = (145, 250, 116)
-        self.shape.collision_type = collision_type
-        self.shape.reset_position = self.reset_position
-
-    def reset_position(self):
-        self.body.position = 500, 500
 
 
 def main():
