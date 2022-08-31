@@ -14,16 +14,16 @@ class WaterworldBase:
         n_pursuers=5,
         n_evaders=5,
         n_poisons=10,
-        n_obstacles=1,
+        n_obstacles=2,
         n_coop=1,
-        n_sensors=30,
+        n_sensors=10,
         sensor_range=0.2,
         radius=0.015,
-        obstacle_radius=0.2,
-        obstacle_coord=(0.5, 0.5),
+        obstacle_radius=0.1,
+        obstacle_coord=[(0.5, 0.5)],
         pursuer_max_accel=0.01,
-        evader_speed=0.01,
-        poison_speed=0.01,
+        evader_speed=0.1,
+        poison_speed=0.1,
         poison_reward=-1.0,
         food_reward=10.0,
         encounter_reward=0.01,
@@ -43,6 +43,11 @@ class WaterworldBase:
         │n_coop: number of pursuing archea (agents) that must be touching food at the same time to consume it  │
         │n_sensors: number of sensors on each of the pursuing archea (agents)                                  │
         │sensor_range: length of sensor dendrite on all pursuing archea (agents)                               │
+        │radius: archea base radius. Pursuer: radius, evader: 2 x radius, poison: 3/4 x radius                 │
+        │obstacle_radius: radius of obstacle object                                                            │
+        │evader_speed: evading archea speed                                                                    │
+        │poison_speed: poison archea speed                                                                     │
+        │obstacle_coord: list of coordinate of obstacle object. Can be set to `None` to use a random location  │
         ╰──────────────────────────────────────────────────────────────────────────────────────────────────────╯
         """
         pygame.init()
@@ -50,7 +55,6 @@ class WaterworldBase:
 
         self.display = pygame.display.set_mode((self.pixel_scale, self.pixel_scale))
         self.clock = pygame.time.Clock()
-        self.space = pymunk.Space()
         self.FPS = 15  # Frames Per Second
 
         self.handlers = []
@@ -61,34 +65,20 @@ class WaterworldBase:
         self.n_coop = n_coop
         self.n_sensors = n_sensors
         self.sensor_range = sensor_range
+        self.base_radius = radius
+        self.obstacle_radius = obstacle_radius
+        self.evader_speed = evader_speed * self.pixel_scale
+        self.poison_speed = poison_speed * self.pixel_scale
 
-        self.add_obj()
-        self.add()
-        self.add_handlers()
+        if obstacle_coord is not None and len(obstacle_coord) != self.n_obstacles:
+            raise ValueError("obstacle_coord does not have same length as n_obstacles")
+        else:
+            self.initial_obstacle_coord = obstacle_coord
 
-        # Bounding Box
-        pts = [
-            (0, 0),
-            (self.pixel_scale, 0),
-            (self.pixel_scale, self.pixel_scale),
-            (0, self.pixel_scale),
-        ]
-        for i in range(4):
-            seg = pymunk.Segment(self.space.static_body, pts[i], pts[(i + 1) % 4], 2)
-            seg.elasticity = 0.999
-            self.space.add(seg)
-
-        for i in range(self.n_pursuers):
-            for j in range(self.n_evaders):
-                idx = i * (self.n_evaders + self.n_poisons) + j
-                self.handlers[idx].begin = self.pursuer_evader_begin_callback
-                self.handlers[idx].separate = self.pursuer_evader_separate_callback
-
-            for k in range(self.n_poisons):
-                idx = i * (self.n_evaders + self.n_poisons) + self.n_evaders + k
-                self.handlers[idx].begin = self.pursuer_poison_begin_callback
+        self.frames = 0
 
         self.seed()
+        self.add_obj()
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
@@ -101,10 +91,12 @@ class WaterworldBase:
         self.obstacles = []
 
         for i in range(self.n_pursuers):
+            x, y = self._generate_coord(self.base_radius)
             self.pursuers.append(
                 Pursuers(
-                    random.randint(0, self.pixel_scale),
-                    random.randint(0, self.pixel_scale),
+                    x,
+                    y,
+                    radius=self.base_radius,
                     collision_type=i + 1,
                     _n_sensors=self.n_sensors,
                     _sensor_range=self.sensor_range,
@@ -112,25 +104,37 @@ class WaterworldBase:
             )
 
         for i in range(self.n_evaders):
+            x, y = self._generate_coord(2 * self.base_radius)
             self.evaders.append(
                 Evaders(
-                    random.randint(0, self.pixel_scale),
-                    random.randint(0, self.pixel_scale),
+                    x,
+                    y,
+                    radius=2 * self.base_radius,
                     collision_type=i + 1000,
+                    max_speed=self.evader_speed,
                 )
             )
 
         for i in range(self.n_poisons):
+            x, y = self._generate_coord(0.75 * self.base_radius)
             self.poisons.append(
                 Poisons(
-                    random.randint(0, self.pixel_scale),
-                    random.randint(0, self.pixel_scale),
+                    x,
+                    y,
+                    radius=0.75 * self.base_radius,
                     collision_type=i + 2000,
+                    max_speed=self.poison_speed,
                 )
             )
 
         for _ in range(self.n_obstacles):
-            self.obstacles.append(Obstacle(self.pixel_scale / 2, self.pixel_scale / 2))
+            self.obstacles.append(
+                Obstacle(
+                    self.pixel_scale / 2,
+                    self.pixel_scale / 2,
+                    radius=self.obstacle_radius,
+                )
+            )
 
     def convert_coordinates(self, value, option="position"):
         if option == "position":
@@ -139,6 +143,9 @@ class WaterworldBase:
             return value[0], -value[1]
 
     def _generate_coord(self, radius):
+        """
+        radius: radius of the object
+        """
         coord = self.np_random.rand(2) * self.pixel_scale
 
         # Create random coordinate that avoids obstacles
@@ -158,9 +165,24 @@ class WaterworldBase:
         return _speed[0], _speed[1]
 
     def add(self):
+        self.space = pymunk.Space()
+
         for obj_list in [self.pursuers, self.evaders, self.poisons, self.obstacles]:
             for obj in obj_list:
                 obj.add(self.space)
+
+    def add_bounding_box(self):
+        # Bounding Box
+        pts = [
+            (0, 0),
+            (self.pixel_scale, 0),
+            (self.pixel_scale, self.pixel_scale),
+            (0, self.pixel_scale),
+        ]
+        for i in range(4):
+            seg = pymunk.Segment(self.space.static_body, pts[i], pts[(i + 1) % 4], 2)
+            seg.elasticity = 0.999
+            self.space.add(seg)
 
     def draw(self):
         for obj_list in [self.pursuers, self.evaders, self.poisons, self.obstacles]:
@@ -177,6 +199,16 @@ class WaterworldBase:
                             pursuer.shape.collision_type, obj.shape.collision_type
                         )
                     )
+
+        for i in range(self.n_pursuers):
+            for j in range(self.n_evaders):
+                idx = i * (self.n_evaders + self.n_poisons) + j
+                self.handlers[idx].begin = self.pursuer_evader_begin_callback
+                self.handlers[idx].separate = self.pursuer_evader_separate_callback
+
+            for k in range(self.n_poisons):
+                idx = i * (self.n_evaders + self.n_poisons) + self.n_evaders + k
+                self.handlers[idx].begin = self.pursuer_poison_begin_callback
 
         # Collision handlers for poisons v.s. evaders
         for poison in self.poisons:
@@ -225,9 +257,41 @@ class WaterworldBase:
                     self.handlers[-1].begin = self.return_false_begin_callback
 
     def reset(self):
-        pass
+        self.frames = 0
+
+        # Initialize obstacles positions
+        if self.initial_obstacle_coord is None:
+            for i, obstacle in enumerate(self.obstacles):
+                obstacle_position = (
+                    self.np_random.rand(self.n_obstacles, 2) * self.pixel_scale
+                )
+                obstacle.body.position = (
+                    obstacle_position[0, 0],
+                    obstacle_position[0, 1],
+                )
+        else:
+            for i, obstacle in enumerate(self.obstacles):
+                obstacle.body.position = (
+                    self.initial_obstacle_coord[i][0] * self.pixel_scale,
+                    self.initial_obstacle_coord[i][1] * self.pixel_scale,
+                )
+
+        # Initial reward is zero
+        reward = np.zeros(self.n_pursuers)
+
+        # Add objects to space
+        self.add()
+        self.add_handlers()
+        self.add_bounding_box()
+
+        # Get observation
+
+        return 0.0
 
     def step(self):
+        pass
+
+    def observe_list(self, sensor_feature, is_colliding_evader, is_colliding_poison):
         pass
 
     def pursuer_poison_begin_callback(self, arbiter, space, data):
@@ -329,7 +393,6 @@ class MovingObject:
         self.pixel_scale = 30 * 25
         self.body = pymunk.Body()
         self.body.position = x, y
-        self.body.velocity = random.uniform(-100, 100), random.uniform(-100, 100)
 
         self.shape = pymunk.Circle(self.body, pixel_scale * radius)
         self.shape.elasticity = 1
@@ -360,6 +423,10 @@ class Evaders(MovingObject):
     def __init__(self, x, y, radius=0.03, collision_type=2, max_speed=100):
         super().__init__(x, y, radius=radius)
 
+        vx = max_speed * random.uniform(-1, 1)
+        vy = max_speed * random.uniform(-1, 1)
+        self.body.velocity = vx, vy
+
         self.color = (238, 116, 106)
         self.shape.collision_type = collision_type
         self.shape.counter = 0
@@ -369,6 +436,10 @@ class Evaders(MovingObject):
 class Poisons(MovingObject):
     def __init__(self, x, y, radius=0.015 * 3 / 4, collision_type=3, max_speed=100):
         super().__init__(x, y, radius=radius)
+
+        vx = max_speed * random.uniform(-1, 1)
+        vy = max_speed * random.uniform(-1, 1)
+        self.body.velocity = vx, vy
 
         self.color = (145, 250, 116)
         self.shape.collision_type = collision_type
@@ -451,30 +522,32 @@ class Pursuers(MovingObject):
 
 
 def main():
-    base = WaterworldBase()
+    for i in range(3):
+        base = WaterworldBase(obstacle_coord=None)
+        base.reset()
 
-    while True:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                return
+        for j in range(200):
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    return
 
-        base.display.fill((255, 255, 255))
-        base.draw()
-        pygame.display.update()
-        base.clock.tick(base.FPS)
-        base.space.step(1 / base.FPS)
+            base.display.fill((255, 255, 255))
+            base.draw()
+            pygame.display.update()
+            base.clock.tick(base.FPS)
+            base.space.step(1 / base.FPS)
 
-        for p in base.pursuers:
-            _p_sensor_vals = []
-            for e in base.evaders:
-                e_coord = base.convert_coordinates(e.body.position)
-                e_vel = base.convert_coordinates(e.body.velocity, option="velocity")
+            for p in base.pursuers:
+                _p_sensor_vals = []
+                for e in base.evaders:
+                    e_coord = base.convert_coordinates(e.body.position)
+                    e_vel = base.convert_coordinates(e.body.velocity, option="velocity")
 
-                sensor_distance_e, sensor_velocity_e = p.get_sensor_reading(
-                    e_coord, e.radius, e_vel, base.convert_coordinates
-                )
-                _p_sensor_vals.append(sensor_distance_e)
-            p_sensor_vals = np.amin(np.concatenate(_p_sensor_vals, axis=1), axis=1)
+                    sensor_distance_e, sensor_velocity_e = p.get_sensor_reading(
+                        e_coord, e.radius, e_vel, base.convert_coordinates
+                    )
+                    _p_sensor_vals.append(sensor_distance_e)
+                p_sensor_vals = np.amin(np.concatenate(_p_sensor_vals, axis=1), axis=1)
 
     pygame.quit()
 
