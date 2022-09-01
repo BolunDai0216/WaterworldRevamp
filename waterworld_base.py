@@ -1,5 +1,6 @@
 import random
 from pdb import set_trace
+from re import S
 
 import numpy as np
 import pygame
@@ -16,7 +17,7 @@ class WaterworldBase:
         n_poisons=10,
         n_obstacles=2,
         n_coop=1,
-        n_sensors=10,
+        n_sensors=30,
         sensor_range=0.2,
         radius=0.015,
         obstacle_radius=0.1,
@@ -48,6 +49,7 @@ class WaterworldBase:
         │evader_speed: evading archea speed                                                                    │
         │poison_speed: poison archea speed                                                                     │
         │obstacle_coord: list of coordinate of obstacle object. Can be set to `None` to use a random location  │
+        │speed_features: toggles whether pursuing archea (agent) sensors detect speed of other archea          │
         ╰──────────────────────────────────────────────────────────────────────────────────────────────────────╯
         """
         pygame.init()
@@ -69,6 +71,7 @@ class WaterworldBase:
         self.obstacle_radius = obstacle_radius
         self.evader_speed = evader_speed * self.pixel_scale
         self.poison_speed = poison_speed * self.pixel_scale
+        self.speed_features = speed_features
 
         if obstacle_coord is not None and len(obstacle_coord) != self.n_obstacles:
             raise ValueError("obstacle_coord does not have same length as n_obstacles")
@@ -179,10 +182,14 @@ class WaterworldBase:
             (self.pixel_scale, self.pixel_scale),
             (0, self.pixel_scale),
         ]
+        self.barriers = []
+
         for i in range(4):
-            seg = pymunk.Segment(self.space.static_body, pts[i], pts[(i + 1) % 4], 2)
-            seg.elasticity = 0.999
-            self.space.add(seg)
+            self.barriers.append(
+                pymunk.Segment(self.space.static_body, pts[i], pts[(i + 1) % 4], 2)
+            )
+            self.barriers[-1].elasticity = 0.999
+            self.space.add(self.barriers[-1])
 
     def draw(self):
         for obj_list in [self.pursuers, self.evaders, self.poisons, self.obstacles]:
@@ -285,14 +292,99 @@ class WaterworldBase:
         self.add_bounding_box()
 
         # Get observation
+        obs_list = self.observe_list()
 
         return 0.0
 
     def step(self):
         pass
 
-    def observe_list(self, sensor_feature, is_colliding_evader, is_colliding_poison):
-        pass
+    def observe_list(self):
+        for i, pursuer in enumerate(self.pursuers):
+            obstacle_distances = []
+            barrier_distances = []
+
+            evader_distances = []
+            evader_velocities = []
+
+            poison_distances = []
+            poison_velocities = []
+
+            _pursuer_distances = []
+            _pursuer_velocities = []
+
+            for obstacle in self.obstacles:
+                obstacle_distance, _ = pursuer.get_sensor_reading(
+                    obstacle.body.position, obstacle.radius, obstacle.body.velocity
+                )
+                obstacle_distances.append(obstacle_distance)
+
+            obstacle_sensor_vals = (
+                np.amin(np.concatenate(obstacle_distances, axis=1), axis=1)
+                / pursuer._sensor_range
+            )
+
+            for barrier in self.barriers:
+                continue
+
+            for evader in self.evaders:
+                evader_distance, evader_velocity = pursuer.get_sensor_reading(
+                    evader.body.position, evader.radius, evader.body.velocity
+                )
+                evader_distances.append(evader_distance)
+                evader_velocities.append(evader_velocity)
+
+            evader_distance_vals = np.concatenate(evader_distances, axis=1)
+            evader_velocity_vals = np.concatenate(evader_velocities, axis=1)
+
+            evader_min_idx = np.argmin(evader_distance_vals, axis=1)
+            evader_sensor_distance_vals = (
+                np.amin(evader_distance_vals, axis=1) / pursuer._sensor_range
+            )
+            evader_sensor_velocity_vals = evader_velocity_vals[
+                np.arange(self.n_sensors), evader_min_idx
+            ]
+
+            for poison in self.poisons:
+                poison_distance, poison_velocity = pursuer.get_sensor_reading(
+                    poison.body.position, poison.radius, poison.body.velocity
+                )
+                poison_distances.append(poison_distance)
+                poison_velocities.append(poison_velocity)
+
+            poison_distance_vals = np.concatenate(poison_distances, axis=1)
+            poison_velocity_vals = np.concatenate(poison_velocities, axis=1)
+
+            poison_min_idx = np.argmin(poison_distance_vals, axis=1)
+            poison_sensor_distance_vals = (
+                np.amin(poison_distance_vals, axis=1) / pursuer._sensor_range
+            )
+            poison_sensor_velocity_vals = poison_velocity_vals[
+                np.arange(self.n_sensors), poison_min_idx
+            ]
+
+            for j, _pursuer in enumerate(self.pursuers):
+                if i == j:
+                    continue
+
+                _pursuer_distance, _pursuer_velocity = pursuer.get_sensor_reading(
+                    _pursuer.body.position, _pursuer.radius, _pursuer.body.velocity
+                )
+                _pursuer_distances.append(_pursuer_distance)
+                _pursuer_velocities.append(_pursuer_velocity)
+
+            _pursuer_distance_vals = np.concatenate(_pursuer_distances, axis=1)
+            _pursuer_velocity_vals = np.concatenate(_pursuer_velocities, axis=1)
+
+            _pursuer_min_idx = np.argmin(_pursuer_distance_vals, axis=1)
+            _pursuer_sensor_distance_vals = (
+                np.amin(_pursuer_distance_vals, axis=1) / pursuer._sensor_range
+            )
+            _pursuer_sensor_velocity_vals = _pursuer_velocity_vals[
+                np.arange(self.n_sensors), _pursuer_min_idx
+            ]
+
+        return 0.0
 
     def pursuer_poison_begin_callback(self, arbiter, space, data):
         """
@@ -370,6 +462,7 @@ class Obstacle:
     def __init__(self, x, y, pixel_scale=750, radius=0.1):
         self.body = pymunk.Body(0, 0, pymunk.Body.STATIC)
         self.body.position = x, y
+        self.body.velocity = 0.0, 0.0
 
         self.shape = pymunk.Circle(self.body, pixel_scale * 0.1)
         self.shape.density = 1
@@ -477,12 +570,10 @@ class Pursuers(MovingObject):
 
         pygame.draw.circle(display, self.color, self.center, self.radius)
 
-    def get_sensor_reading(
-        self, object_coord, object_radius, object_velocity, convert_coordinates
-    ):
+    def get_sensor_reading(self, object_coord, object_radius, object_velocity):
         # Get location and velocity of pursuer
-        self.center = convert_coordinates(self.body.position)
-        self.velocity = convert_coordinates(self.body.velocity, option="velocity")
+        self.center = self.body.position
+        self.velocity = self.body.velocity
 
         # Get distance of object in local frame as a 2x1 numpy array
         distance_vec = np.array(
@@ -512,8 +603,8 @@ class Pursuers(MovingObject):
         )
         not_sensed_idx = wrong_direction_idx | out_of_range_idx | no_intersection_idx
 
-        # Set not sensed sensor readings of position to inf
-        sensor_distances[not_sensed_idx] = np.inf
+        # Set not sensed sensor readings of position to sensor range
+        sensor_distances[not_sensed_idx] = self._sensor_range
 
         # Set not sensed sensor readings of velocity to zero
         sensor_velocities[not_sensed_idx] = 0.0
@@ -537,17 +628,18 @@ def main():
             base.clock.tick(base.FPS)
             base.space.step(1 / base.FPS)
 
-            for p in base.pursuers:
-                _p_sensor_vals = []
-                for e in base.evaders:
-                    e_coord = base.convert_coordinates(e.body.position)
-                    e_vel = base.convert_coordinates(e.body.velocity, option="velocity")
+            # for p in base.pursuers:
+            #     _p_sensor_vals = []
+            #     for e in base.evaders:
+            #         e_coord = base.convert_coordinates(e.body.position)
+            #         e_vel = base.convert_coordinates(e.body.velocity, option="velocity")
 
-                    sensor_distance_e, sensor_velocity_e = p.get_sensor_reading(
-                        e_coord, e.radius, e_vel, base.convert_coordinates
-                    )
-                    _p_sensor_vals.append(sensor_distance_e)
-                p_sensor_vals = np.amin(np.concatenate(_p_sensor_vals, axis=1), axis=1)
+            #         sensor_distance_e, sensor_velocity_e = p.get_sensor_reading(
+            #             e_coord, e.radius, e_vel, base.convert_coordinates
+            #         )
+            #         _p_sensor_vals.append(sensor_distance_e)
+            #     p_sensor_vals = np.amin(np.concatenate(_p_sensor_vals, axis=1), axis=1)
+            base.observe_list()
 
     pygame.quit()
 
