@@ -300,9 +300,10 @@ class WaterworldBase:
         pass
 
     def observe_list(self):
+        observe_list = []
+
         for i, pursuer in enumerate(self.pursuers):
             obstacle_distances = []
-            barrier_distances = []
 
             evader_distances = []
             evader_velocities = []
@@ -324,8 +325,7 @@ class WaterworldBase:
                 / pursuer._sensor_range
             )
 
-            for barrier in self.barriers:
-                continue
+            barrier_distances = pursuer.get_sensor_barrier_readings()
 
             for evader in self.evaders:
                 evader_distance, evader_velocity = pursuer.get_sensor_reading(
@@ -384,7 +384,37 @@ class WaterworldBase:
                 np.arange(self.n_sensors), _pursuer_min_idx
             ]
 
-        return 0.0
+            if self.speed_features:
+                pursuer_observation = np.concatenate(
+                    [
+                        obstacle_sensor_vals,
+                        barrier_distances,
+                        evader_sensor_distance_vals,
+                        evader_sensor_velocity_vals,
+                        poison_sensor_distance_vals,
+                        poison_sensor_velocity_vals,
+                        _pursuer_sensor_distance_vals,
+                        _pursuer_sensor_velocity_vals,
+                        np.array([pursuer.shape.food_indicator]),
+                        np.array([pursuer.shape.poison_indicator]),
+                    ]
+                )
+            else:
+                pursuer_observation = np.concatenate(
+                    [
+                        obstacle_sensor_vals,
+                        barrier_distances,
+                        evader_sensor_distance_vals,
+                        poison_sensor_distance_vals,
+                        _pursuer_sensor_distance_vals,
+                        np.array([pursuer.shape.food_indicator]),
+                        np.array([pursuer.shape.poison_indicator]),
+                    ]
+                )
+
+            observe_list.append(pursuer_observation)
+
+        return observe_list
 
     def pursuer_poison_begin_callback(self, arbiter, space, data):
         """
@@ -570,6 +600,43 @@ class Pursuers(MovingObject):
 
         pygame.draw.circle(display, self.color, self.center, self.radius)
 
+    def get_sensor_barrier_readings(self):
+        sensor_vectors = self._sensors * self._sensor_range
+        position_vec = np.array([self.body.position.x, self.body.position.y])
+        sensor_endpoints = position_vec + sensor_vectors
+
+        # Clip sensor lines on the environment's barriers.
+        # Note that any clipped vectors may not be at the same angle as the original sensors
+        clipped_endpoints = np.clip(sensor_endpoints, 0.0, self.pixel_scale)
+
+        # Extract just the sensor vectors after clipping
+        clipped_vectors = clipped_endpoints - position_vec
+
+        # Find the ratio of the clipped sensor vector to the original sensor vector
+        # Scaling the vector by this ratio will limit the end of the vector to the barriers
+        ratios = np.divide(
+            clipped_vectors,
+            sensor_vectors,
+            out=np.ones_like(clipped_vectors),
+            where=np.abs(sensor_vectors) > 1e-8,
+        )
+
+        # Find the minimum ratio (x or y) of clipped endpoints to original endpoints
+        minimum_ratios = np.amin(ratios, axis=1)
+
+        # Convert to 2d array of size (n_sensors, 1)
+        sensor_values = np.expand_dims(minimum_ratios, 0)
+
+        # Set values beyond sensor range to infinity
+        does_sense = minimum_ratios < (1.0 - 1e-4)
+        does_sense = np.expand_dims(does_sense, 0)
+        sensor_values[np.logical_not(does_sense)] = np.inf
+
+        # Convert -0 to 0
+        sensor_values[sensor_values == -0] = 0
+
+        return sensor_values[0, :]
+
     def get_sensor_reading(self, object_coord, object_radius, object_velocity):
         # Get location and velocity of pursuer
         self.center = self.body.position
@@ -639,7 +706,7 @@ def main():
             #         )
             #         _p_sensor_vals.append(sensor_distance_e)
             #     p_sensor_vals = np.amin(np.concatenate(_p_sensor_vals, axis=1), axis=1)
-            base.observe_list()
+            obs_list = base.observe_list()
 
     pygame.quit()
 
