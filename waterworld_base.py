@@ -1,6 +1,6 @@
+import math
 import random
 from pdb import set_trace
-from re import S
 
 import numpy as np
 import pygame
@@ -50,6 +50,9 @@ class WaterworldBase:
         │poison_speed: poison archea speed                                                                     │
         │obstacle_coord: list of coordinate of obstacle object. Can be set to `None` to use a random location  │
         │speed_features: toggles whether pursuing archea (agent) sensors detect speed of other archea          │
+        │pursuer_max_accel: pursuer archea maximum acceleration (maximum action size)                          │
+        │thrust_penalty: scaling factor for the negative reward used to penalize large actions                 │
+        │local_ratio: proportion of reward allocated locally vs distributed globally among all agents          │
         ╰──────────────────────────────────────────────────────────────────────────────────────────────────────╯
         """
         pygame.init()
@@ -72,6 +75,9 @@ class WaterworldBase:
         self.evader_speed = evader_speed * self.pixel_scale
         self.poison_speed = poison_speed * self.pixel_scale
         self.speed_features = speed_features
+        self.pursuer_max_accel = pursuer_max_accel
+        self.thrust_penalty = thrust_penalty
+        self.local_ratio = local_ratio
 
         if obstacle_coord is not None and len(obstacle_coord) != self.n_obstacles:
             raise ValueError("obstacle_coord does not have same length as n_obstacles")
@@ -296,8 +302,52 @@ class WaterworldBase:
 
         return 0.0
 
-    def step(self):
-        pass
+    def step(self, action, agent_id, is_last):
+        action = np.asarray(action)
+        action = action.reshape(2)
+        speed = np.linalg.norm(action)
+        if speed > self.pursuer_max_accel:
+            # Limit added thrust to self.pursuer_max_accel
+            action = action / speed * self.pursuer_max_accel
+
+        p = self.pursuers[agent_id]
+        _velocity = p.velocity + action
+        p.reset_velocity(_velocity[0], _velocity[1])
+
+        # Penalize large thrusts
+        accel_penalty = self.thrust_penalty * math.sqrt((action**2).sum())
+
+        # Average thrust penalty among all agents, and assign each agent global portion designated by (1 - local_ratio)
+        self.control_rewards = (
+            (accel_penalty / self.n_pursuers)
+            * np.ones(self.n_pursuers)
+            * (1 - self.local_ratio)
+        )
+
+        # Assign the current agent the local portion designated by local_ratio
+        self.control_rewards[agent_id] += accel_penalty * self.local_ratio
+
+        if is_last:
+            # TODO: add actual rewards
+            rewards = 0.0
+
+            obs_list = self.observe_list()
+            self.last_obs = obs_list
+
+            local_reward = rewards
+            global_reward = local_reward.mean()
+
+            # Distribute local and global rewards according to local_ratio
+            self.last_rewards = local_reward * self.local_ratio + global_reward * (
+                1 - self.local_ratio
+            )
+
+            self.frames += 1
+
+        return self.observe(agent_id)
+
+    def observe(self, agent_id):
+        return np.array(self.last_obs[agent_id], dtype=np.float32)
 
     def observe_list(self):
         observe_list = []
@@ -590,6 +640,10 @@ class Pursuers(MovingObject):
         sensor_vectors = np.c_[np.cos(angles), np.sin(angles)]
         self._sensors = sensor_vectors
         self.shape.custom_value = 1
+
+    def set_velocity(self, velocity):
+        assert velocity.shape == (2,)
+        self.body.velocity = velocity
 
     def draw(self, display, convert_coordinates):
         self.center = convert_coordinates(self.body.position)
