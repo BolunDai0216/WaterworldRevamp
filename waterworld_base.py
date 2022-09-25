@@ -55,6 +55,9 @@ class WaterworldBase:
         │pursuer_max_accel: pursuer archea maximum acceleration (maximum action size)                          │
         │thrust_penalty: scaling factor for the negative reward used to penalize large actions                 │
         │local_ratio: proportion of reward allocated locally vs distributed globally among all agents          │
+        │food_reward: reward for pursuers consuming an evading archea                                          │
+        │poison_reward: reward for pursuer consuming a poison object (typically negative)                      │
+        │encounter_reward: reward for a pursuer colliding with an evading archea                               │
         ╰──────────────────────────────────────────────────────────────────────────────────────────────────────╯
         """
         pygame.init()
@@ -302,9 +305,6 @@ class WaterworldBase:
                     self.initial_obstacle_coord[i][1] * self.pixel_scale,
                 )
 
-        # Initial reward is zero
-        reward = np.zeros(self.n_pursuers)
-
         # Add objects to space
         self.add()
         self.add_handlers()
@@ -319,7 +319,7 @@ class WaterworldBase:
         self.last_dones = [False for _ in range(self.n_pursuers)]
         self.last_obs = obs_list
 
-        return 0.0
+        return obs_list[0]
 
     def step(self, action, agent_id, is_last):
         action = np.asarray(action)
