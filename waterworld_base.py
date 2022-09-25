@@ -8,6 +8,8 @@ import pymunk
 from gym.utils import seeding
 from scipy.spatial import distance as ssd
 
+from waterworld_models import Evaders, Obstacle, Poisons, Pursuers
+
 
 class WaterworldBase:
     def __init__(
@@ -78,6 +80,16 @@ class WaterworldBase:
         self.pursuer_max_accel = pursuer_max_accel
         self.thrust_penalty = thrust_penalty
         self.local_ratio = local_ratio
+        self.poison_reward = poison_reward
+        self.food_reward = food_reward
+        self.encounter_reward = encounter_reward
+        self.max_cycles = max_cycles
+
+        self.last_rewards = [np.float64(0) for _ in range(self.n_pursuers)]
+        self.control_rewards = [0 for _ in range(self.n_pursuers)]
+        self.behavior_rewards = [0 for _ in range(self.n_pursuers)]
+        self.last_dones = [False for _ in range(self.n_pursuers)]
+        self.last_obs = [None for _ in range(self.n_pursuers)]
 
         if obstacle_coord is not None and len(obstacle_coord) != self.n_obstacles:
             raise ValueError("obstacle_coord does not have same length as n_obstacles")
@@ -183,16 +195,17 @@ class WaterworldBase:
     def add_bounding_box(self):
         # Bounding Box
         pts = [
-            (0, 0),
-            (self.pixel_scale, 0),
-            (self.pixel_scale, self.pixel_scale),
-            (0, self.pixel_scale),
+            (-100, -100),
+            (self.pixel_scale + 100, -100),
+            (self.pixel_scale + 100, self.pixel_scale + 100),
+            (-100, self.pixel_scale + 100),
         ]
+
         self.barriers = []
 
         for i in range(4):
             self.barriers.append(
-                pymunk.Segment(self.space.static_body, pts[i], pts[(i + 1) % 4], 2)
+                pymunk.Segment(self.space.static_body, pts[i], pts[(i + 1) % 4], 100)
             )
             self.barriers[-1].elasticity = 0.999
             self.space.add(self.barriers[-1])
@@ -300,6 +313,12 @@ class WaterworldBase:
         # Get observation
         obs_list = self.observe_list()
 
+        self.last_rewards = [np.float64(0) for _ in range(self.n_pursuers)]
+        self.control_rewards = [0 for _ in range(self.n_pursuers)]
+        self.behavior_rewards = [0 for _ in range(self.n_pursuers)]
+        self.last_dones = [False for _ in range(self.n_pursuers)]
+        self.last_obs = obs_list
+
         return 0.0
 
     def step(self, action, agent_id, is_last):
@@ -311,7 +330,7 @@ class WaterworldBase:
             action = action / speed * self.pursuer_max_accel
 
         p = self.pursuers[agent_id]
-        _velocity = p.velocity + action
+        _velocity = p.body.velocity + action * self.pixel_scale
         p.reset_velocity(_velocity[0], _velocity[1])
 
         # Penalize large thrusts
@@ -328,8 +347,28 @@ class WaterworldBase:
         self.control_rewards[agent_id] += accel_penalty * self.local_ratio
 
         if is_last:
-            # TODO: add actual rewards
-            rewards = 0.0
+            # Step environment
+            self.display.fill((255, 255, 255))
+            self.draw()
+            pygame.display.update()
+            self.clock.tick(self.FPS)
+            self.space.step(1 / self.FPS)
+
+            for id in range(self.n_pursuers):
+                p = self.pursuers[agent_id]
+
+                # reward for food caught, encountered and poison
+                self.behavior_rewards[id] = (
+                    self.food_reward * p.shape.food_indicator
+                    + self.encounter_reward * p.shape.food_touched_indicator
+                    + self.poison_reward * p.shape.poison_indicator
+                )
+
+                p.shape.food_indicator = 0
+                p.shape.food_touched_indicator = 0
+                p.shape.poison_indicator = 0
+
+            rewards = np.array(self.behavior_rewards) + np.array(self.control_rewards)
 
             obs_list = self.observe_list()
             self.last_obs = obs_list
@@ -337,7 +376,7 @@ class WaterworldBase:
             local_reward = rewards
             global_reward = local_reward.mean()
 
-            # Distribute local and global rewards according to local_ratio
+            # # Distribute local and global rewards according to local_ratio
             self.last_rewards = local_reward * self.local_ratio + global_reward * (
                 1 - self.local_ratio
             )
@@ -499,6 +538,9 @@ class WaterworldBase:
         # Add one collision to evader
         evader_shape.counter += 1
 
+        # Indicate that food is touched by pursuer
+        pursuer_shape.food_touched_indicator = 1
+
         if evader_shape.counter >= self.n_coop:
             # For giving reward to pursuer
             pursuer_shape.food_indicator = 1
@@ -536,239 +578,3 @@ class WaterworldBase:
         Callback function that simply returns False.
         """
         return False
-
-
-class Obstacle:
-    def __init__(self, x, y, pixel_scale=750, radius=0.1):
-        self.body = pymunk.Body(0, 0, pymunk.Body.STATIC)
-        self.body.position = x, y
-        self.body.velocity = 0.0, 0.0
-
-        self.shape = pymunk.Circle(self.body, pixel_scale * 0.1)
-        self.shape.density = 1
-        self.shape.elasticity = 1
-        self.shape.custom_value = 1
-
-        self.radius = radius * pixel_scale
-        self.color = (120, 176, 178)
-
-    def add(self, space):
-        space.add(self.body, self.shape)
-
-    def draw(self, display, convert_coordinates):
-        pygame.draw.circle(
-            display, self.color, convert_coordinates(self.body.position), self.radius
-        )
-
-
-class MovingObject:
-    def __init__(self, x, y, pixel_scale=750, radius=0.015):
-        self.pixel_scale = 30 * 25
-        self.body = pymunk.Body()
-        self.body.position = x, y
-
-        self.shape = pymunk.Circle(self.body, pixel_scale * radius)
-        self.shape.elasticity = 1
-        self.shape.density = 1
-        self.shape.custom_value = 1
-
-        self.shape.reset_position = self.reset_position
-        self.shape.reset_velocity = self.reset_velocity
-
-        self.radius = radius * pixel_scale
-
-    def add(self, space):
-        space.add(self.body, self.shape)
-
-    def draw(self, display, convert_coordinates):
-        pygame.draw.circle(
-            display, self.color, convert_coordinates(self.body.position), self.radius
-        )
-
-    def reset_position(self, x, y):
-        self.body.position = x, y
-
-    def reset_velocity(self, vx, vy):
-        self.body.velocity = vx, vy
-
-
-class Evaders(MovingObject):
-    def __init__(self, x, y, radius=0.03, collision_type=2, max_speed=100):
-        super().__init__(x, y, radius=radius)
-
-        vx = max_speed * random.uniform(-1, 1)
-        vy = max_speed * random.uniform(-1, 1)
-        self.body.velocity = vx, vy
-
-        self.color = (238, 116, 106)
-        self.shape.collision_type = collision_type
-        self.shape.counter = 0
-        self.shape.max_speed = max_speed
-
-
-class Poisons(MovingObject):
-    def __init__(self, x, y, radius=0.015 * 3 / 4, collision_type=3, max_speed=100):
-        super().__init__(x, y, radius=radius)
-
-        vx = max_speed * random.uniform(-1, 1)
-        vy = max_speed * random.uniform(-1, 1)
-        self.body.velocity = vx, vy
-
-        self.color = (145, 250, 116)
-        self.shape.collision_type = collision_type
-        self.shape.max_speed = max_speed
-
-
-class Pursuers(MovingObject):
-    def __init__(
-        self, x, y, radius=0.015, _n_sensors=30, _sensor_range=0.2, collision_type=1
-    ):
-        super().__init__(x, y, radius=radius)
-
-        self.color = (101, 104, 249)
-        self.shape.collision_type = collision_type
-        self.sensor_color = (0, 0, 0)
-        self._n_sensors = _n_sensors
-        self._sensor_range = _sensor_range * self.pixel_scale
-        self.shape.food_indicator = 0  # 1 if food caught this step, 0 otherwise
-        self.shape.poison_indicator = 0  # 1 if poisoned this step, 0 otherwise
-
-        # Generate self._n_sensors angles, evenly spaced from 0 to 2pi
-        # We generate 1 extra angle and remove it because linspace[0] = 0 = 2pi = linspace[-1]
-        angles = np.linspace(0.0, 2.0 * np.pi, self._n_sensors + 1)[:-1]
-        # Convert angles to x-y coordinates
-        sensor_vectors = np.c_[np.cos(angles), np.sin(angles)]
-        self._sensors = sensor_vectors
-        self.shape.custom_value = 1
-
-    def set_velocity(self, velocity):
-        assert velocity.shape == (2,)
-        self.body.velocity = velocity
-
-    def draw(self, display, convert_coordinates):
-        self.center = convert_coordinates(self.body.position)
-        for sensor in self._sensors:
-            start = self.center
-            end = self.center + self._sensor_range * sensor
-            pygame.draw.line(display, self.sensor_color, start, end, 1)
-
-        pygame.draw.circle(display, self.color, self.center, self.radius)
-
-    def get_sensor_barrier_readings(self):
-        sensor_vectors = self._sensors * self._sensor_range
-        position_vec = np.array([self.body.position.x, self.body.position.y])
-        sensor_endpoints = position_vec + sensor_vectors
-
-        # Clip sensor lines on the environment's barriers.
-        # Note that any clipped vectors may not be at the same angle as the original sensors
-        clipped_endpoints = np.clip(sensor_endpoints, 0.0, self.pixel_scale)
-
-        # Extract just the sensor vectors after clipping
-        clipped_vectors = clipped_endpoints - position_vec
-
-        # Find the ratio of the clipped sensor vector to the original sensor vector
-        # Scaling the vector by this ratio will limit the end of the vector to the barriers
-        ratios = np.divide(
-            clipped_vectors,
-            sensor_vectors,
-            out=np.ones_like(clipped_vectors),
-            where=np.abs(sensor_vectors) > 1e-8,
-        )
-
-        # Find the minimum ratio (x or y) of clipped endpoints to original endpoints
-        minimum_ratios = np.amin(ratios, axis=1)
-
-        # Convert to 2d array of size (n_sensors, 1)
-        sensor_values = np.expand_dims(minimum_ratios, 0)
-
-        # Set values beyond sensor range to infinity
-        does_sense = minimum_ratios < (1.0 - 1e-4)
-        does_sense = np.expand_dims(does_sense, 0)
-        sensor_values[np.logical_not(does_sense)] = np.inf
-
-        # Convert -0 to 0
-        sensor_values[sensor_values == -0] = 0
-
-        return sensor_values[0, :]
-
-    def get_sensor_reading(self, object_coord, object_radius, object_velocity):
-        # Get location and velocity of pursuer
-        self.center = self.body.position
-        self.velocity = self.body.velocity
-
-        # Get distance of object in local frame as a 2x1 numpy array
-        distance_vec = np.array(
-            [[object_coord[0] - self.center[0]], [object_coord[1] - self.center[1]]]
-        )
-        distance_squared = np.sum(distance_vec**2)
-
-        # Get relative velocity as a 2x1 numpy array
-        relative_speed = np.array(
-            [
-                [object_velocity[0] - self.velocity[0]],
-                [object_velocity[1] - self.velocity[1]],
-            ]
-        )
-
-        # Project distance to sensor vectors
-        sensor_distances = self._sensors @ distance_vec
-
-        # Project velocity vector to sensor vectors
-        sensor_velocities = self._sensors @ relative_speed
-
-        # Check for valid detection criterions
-        wrong_direction_idx = sensor_distances < 0
-        out_of_range_idx = sensor_distances - object_radius > self._sensor_range
-        no_intersection_idx = (
-            distance_squared - sensor_distances**2 > object_radius**2
-        )
-        not_sensed_idx = wrong_direction_idx | out_of_range_idx | no_intersection_idx
-
-        # Set not sensed sensor readings of position to sensor range
-        sensor_distances[not_sensed_idx] = self._sensor_range
-
-        # Set not sensed sensor readings of velocity to zero
-        sensor_velocities[not_sensed_idx] = 0.0
-
-        return sensor_distances, sensor_velocities
-
-
-def main():
-    for i in range(3):
-        base = WaterworldBase(obstacle_coord=None)
-        base.reset()
-
-        for j in range(200):
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    return
-
-            base.display.fill((255, 255, 255))
-            base.draw()
-            pygame.display.update()
-            base.clock.tick(base.FPS)
-            base.space.step(1 / base.FPS)
-
-            # for p in base.pursuers:
-            #     _p_sensor_vals = []
-            #     for e in base.evaders:
-            #         e_coord = base.convert_coordinates(e.body.position)
-            #         e_vel = base.convert_coordinates(e.body.velocity, option="velocity")
-
-            #         sensor_distance_e, sensor_velocity_e = p.get_sensor_reading(
-            #             e_coord, e.radius, e_vel, base.convert_coordinates
-            #         )
-            #         _p_sensor_vals.append(sensor_distance_e)
-            #     p_sensor_vals = np.amin(np.concatenate(_p_sensor_vals, axis=1), axis=1)
-            obs_list = base.observe_list()
-
-    pygame.quit()
-
-
-if __name__ == "__main__":
-    main()
-
-
-# [x] Making food disappear on colliding with more than n_coop objects at once
-# [x] Draw spokes on pursuers
-# [ ] Set categories and masks for objects
