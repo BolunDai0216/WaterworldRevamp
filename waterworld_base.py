@@ -120,10 +120,11 @@ class WaterworldBase:
                 Pursuers(
                     x,
                     y,
+                    self.pursuer_max_accel,
                     radius=self.base_radius,
                     collision_type=i + 1,
-                    _n_sensors=self.n_sensors,
-                    _sensor_range=self.sensor_range,
+                    n_sensors=self.n_sensors,
+                    sensor_range=self.sensor_range,
                 )
             )
 
@@ -411,7 +412,7 @@ class WaterworldBase:
 
             obstacle_sensor_vals = (
                 np.amin(np.concatenate(obstacle_distances, axis=1), axis=1)
-                / pursuer._sensor_range
+                / pursuer.sensor_range
             )
 
             barrier_distances = pursuer.get_sensor_barrier_readings()
@@ -428,7 +429,7 @@ class WaterworldBase:
 
             evader_min_idx = np.argmin(evader_distance_vals, axis=1)
             evader_sensor_distance_vals = (
-                np.amin(evader_distance_vals, axis=1) / pursuer._sensor_range
+                np.amin(evader_distance_vals, axis=1) / pursuer.sensor_range
             )
             evader_sensor_velocity_vals = evader_velocity_vals[
                 np.arange(self.n_sensors), evader_min_idx
@@ -446,7 +447,7 @@ class WaterworldBase:
 
             poison_min_idx = np.argmin(poison_distance_vals, axis=1)
             poison_sensor_distance_vals = (
-                np.amin(poison_distance_vals, axis=1) / pursuer._sensor_range
+                np.amin(poison_distance_vals, axis=1) / pursuer.sensor_range
             )
             poison_sensor_velocity_vals = poison_velocity_vals[
                 np.arange(self.n_sensors), poison_min_idx
@@ -467,7 +468,7 @@ class WaterworldBase:
 
             _pursuer_min_idx = np.argmin(_pursuer_distance_vals, axis=1)
             _pursuer_sensor_distance_vals = (
-                np.amin(_pursuer_distance_vals, axis=1) / pursuer._sensor_range
+                np.amin(_pursuer_distance_vals, axis=1) / pursuer.sensor_range
             )
             _pursuer_sensor_velocity_vals = _pursuer_velocity_vals[
                 np.arange(self.n_sensors), _pursuer_min_idx
