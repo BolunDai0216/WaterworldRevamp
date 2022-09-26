@@ -1,5 +1,4 @@
 import numpy as np
-import pygame
 
 from waterworld_base import WaterworldBase
 
@@ -8,10 +7,8 @@ def main():
     base = WaterworldBase(obstacle_coord=None)
     base.reset()
 
-    for j in range(10000):
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                return
+    for j in range(1000):
+        obs = base.render(mode="human")
 
         for i, p in enumerate(base.pursuers):
             if i == 4:
@@ -22,7 +19,7 @@ def main():
             action = 1000 * (2 * np.random.random(2) - 1)
             base.step(action, i, islast)
 
-    pygame.quit()
+    base.close()
 
 
 if __name__ == "__main__":

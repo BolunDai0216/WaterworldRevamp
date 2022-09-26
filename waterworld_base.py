@@ -60,10 +60,7 @@ class WaterworldBase:
         │encounter_reward: reward for a pursuer colliding with an evading archea                               │
         ╰──────────────────────────────────────────────────────────────────────────────────────────────────────╯
         """
-        pygame.init()
         self.pixel_scale = 30 * 25
-
-        self.display = pygame.display.set_mode((self.pixel_scale, self.pixel_scale))
         self.clock = pygame.time.Clock()
         self.FPS = 15  # Frames Per Second
 
@@ -87,6 +84,7 @@ class WaterworldBase:
         self.food_reward = food_reward
         self.encounter_reward = encounter_reward
         self.max_cycles = max_cycles
+        self.renderOn = False
 
         self.last_rewards = [np.float64(0) for _ in range(self.n_pursuers)]
         self.control_rewards = [0 for _ in range(self.n_pursuers)]
@@ -163,6 +161,11 @@ class WaterworldBase:
                     radius=self.obstacle_radius,
                 )
             )
+
+    def close(self):
+        if self.renderOn:
+            pygame.display.quit()
+            pygame.quit()
 
     def convert_coordinates(self, value, option="position"):
         """
@@ -401,11 +404,6 @@ class WaterworldBase:
         self.control_rewards[agent_id] += accel_penalty * self.local_ratio
 
         if is_last:
-            # Step environment
-            self.display.fill((255, 255, 255))
-            self.draw()
-            pygame.display.update()
-            self.clock.tick(self.FPS)
             self.space.step(1 / self.FPS)
 
             for id in range(self.n_pursuers):
@@ -632,3 +630,32 @@ class WaterworldBase:
         Callback function that simply returns False.
         """
         return False
+
+    def render(self, mode="human"):
+        if not self.renderOn:
+            pygame.init()
+
+            if mode == "human":
+                self.display = pygame.display.set_mode(
+                    (self.pixel_scale, self.pixel_scale)
+                )
+            else:
+                self.display = pygame.Surface((self.pixel_scale, self.pixel_scale))
+
+            self.renderOn = True
+
+        self.display.fill((255, 255, 255))
+        self.draw()
+        self.clock.tick(self.FPS)
+
+        observation = pygame.surfarray.pixels3d(self.display)
+        new_observation = np.copy(observation)
+        del observation
+
+        if mode == "human":
+            pygame.display.update()
+        return (
+            np.transpose(new_observation, axes=(1, 0, 2))
+            if mode == "rgb_array"
+            else None
+        )
