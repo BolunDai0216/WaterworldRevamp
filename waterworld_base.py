@@ -162,8 +162,27 @@ class WaterworldBase:
             )
 
     def convert_coordinates(self, value, option="position"):
+        """
+        This function converts coordinates in pymunk into pygame coordinates.
+
+        The coordinate system in pygame is:
+
+                 (0, 0) +-------+ (WINDOWSIZE, 0)           + ──── → x
+                        |       |                           │
+                        |       |                           │
+        (0, WINDOWSIZE) +-------+ (WINDOWSIZE, WINDOWSIZE)  ↓ y
+
+        The coordinate system in pymunk is:
+
+        (0, WINDOWSIZE) +-------+ (WINDOWSIZE, WINDOWSIZE)  ↑ y
+                        |       |                           │
+                        |       |                           │
+                 (0, 0) +-------+ (WINDOWSIZE, 0)           + ──── → x
+        """
+
         if option == "position":
             return int(value[0]), self.pixel_scale - int(value[1])
+
         if option == "velocity":
             return value[0], -value[1]
 
