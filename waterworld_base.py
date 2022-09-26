@@ -65,32 +65,39 @@ class WaterworldBase:
         self.FPS = 15  # Frames Per Second
 
         self.handlers = []
-        self.n_pursuers = n_pursuers
-        self.n_evaders = n_evaders
-        self.n_poisons = n_poisons
-        self.n_obstacles = n_obstacles
+
         self.n_coop = n_coop
+        self.n_evaders = n_evaders
+        self.n_obstacles = n_obstacles
+        self.n_poisons = n_poisons
+        self.n_pursuers = n_pursuers
         self.n_sensors = n_sensors
-        self.sensor_range = sensor_range
+
         self.base_radius = radius
         self.obstacle_radius = obstacle_radius
+        self.sensor_range = sensor_range
+
         self.evader_speed = evader_speed * self.pixel_scale
         self.poison_speed = poison_speed * self.pixel_scale
         self.speed_features = speed_features
+
         self.pursuer_max_accel = pursuer_max_accel
-        self.thrust_penalty = thrust_penalty
+
+        self.encounter_reward = encounter_reward
+        self.food_reward = food_reward
         self.local_ratio = local_ratio
         self.poison_reward = poison_reward
-        self.food_reward = food_reward
-        self.encounter_reward = encounter_reward
+        self.thrust_penalty = thrust_penalty
+
         self.max_cycles = max_cycles
         self.renderOn = False
 
-        self.last_rewards = [np.float64(0) for _ in range(self.n_pursuers)]
         self.control_rewards = [0 for _ in range(self.n_pursuers)]
         self.behavior_rewards = [0 for _ in range(self.n_pursuers)]
+
         self.last_dones = [False for _ in range(self.n_pursuers)]
         self.last_obs = [None for _ in range(self.n_pursuers)]
+        self.last_rewards = [np.float64(0) for _ in range(self.n_pursuers)]
 
         if obstacle_coord is not None and len(obstacle_coord) != self.n_obstacles:
             raise ValueError("obstacle_coord does not have same length as n_obstacles")
