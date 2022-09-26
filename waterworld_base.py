@@ -461,9 +461,8 @@ class WaterworldBase:
                 )
                 obstacle_distances.append(obstacle_distance)
 
-            obstacle_sensor_vals = (
-                np.amin(np.concatenate(obstacle_distances, axis=1), axis=1)
-                / pursuer.sensor_range
+            obstacle_sensor_vals = self.get_sensor_readings(
+                obstacle_distances, pursuer.sensor_range
             )
 
             barrier_distances = pursuer.get_sensor_barrier_readings()
@@ -475,16 +474,12 @@ class WaterworldBase:
                 evader_distances.append(evader_distance)
                 evader_velocities.append(evader_velocity)
 
-            evader_distance_vals = np.concatenate(evader_distances, axis=1)
-            evader_velocity_vals = np.concatenate(evader_velocities, axis=1)
-
-            evader_min_idx = np.argmin(evader_distance_vals, axis=1)
-            evader_sensor_distance_vals = (
-                np.amin(evader_distance_vals, axis=1) / pursuer.sensor_range
+            (
+                evader_sensor_distance_vals,
+                evader_sensor_velocity_vals,
+            ) = self.get_sensor_readings(
+                evader_distances, pursuer.sensor_range, velocites=evader_velocities
             )
-            evader_sensor_velocity_vals = evader_velocity_vals[
-                np.arange(self.n_sensors), evader_min_idx
-            ]
 
             for poison in self.poisons:
                 poison_distance, poison_velocity = pursuer.get_sensor_reading(
@@ -493,18 +488,15 @@ class WaterworldBase:
                 poison_distances.append(poison_distance)
                 poison_velocities.append(poison_velocity)
 
-            poison_distance_vals = np.concatenate(poison_distances, axis=1)
-            poison_velocity_vals = np.concatenate(poison_velocities, axis=1)
-
-            poison_min_idx = np.argmin(poison_distance_vals, axis=1)
-            poison_sensor_distance_vals = (
-                np.amin(poison_distance_vals, axis=1) / pursuer.sensor_range
+            (
+                poison_sensor_distance_vals,
+                poison_sensor_velocity_vals,
+            ) = self.get_sensor_readings(
+                poison_distances, pursuer.sensor_range, velocites=poison_velocities
             )
-            poison_sensor_velocity_vals = poison_velocity_vals[
-                np.arange(self.n_sensors), poison_min_idx
-            ]
 
             for j, _pursuer in enumerate(self.pursuers):
+                # Get sensor readings only for other pursuers
                 if i == j:
                     continue
 
@@ -514,17 +506,14 @@ class WaterworldBase:
                 _pursuer_distances.append(_pursuer_distance)
                 _pursuer_velocities.append(_pursuer_velocity)
 
-            _pursuer_distance_vals = np.concatenate(_pursuer_distances, axis=1)
-            _pursuer_velocity_vals = np.concatenate(_pursuer_velocities, axis=1)
-
-            _pursuer_min_idx = np.argmin(_pursuer_distance_vals, axis=1)
-            _pursuer_sensor_distance_vals = (
-                np.amin(_pursuer_distance_vals, axis=1) / pursuer.sensor_range
+            (
+                _pursuer_sensor_distance_vals,
+                _pursuer_sensor_velocity_vals,
+            ) = self.get_sensor_readings(
+                _pursuer_distances, pursuer.sensor_range, velocites=_pursuer_velocities
             )
-            _pursuer_sensor_velocity_vals = _pursuer_velocity_vals[
-                np.arange(self.n_sensors), _pursuer_min_idx
-            ]
 
+            # concatenate all observations
             if self.speed_features:
                 pursuer_observation = np.concatenate(
                     [
@@ -557,6 +546,29 @@ class WaterworldBase:
 
         return observe_list
 
+    def get_sensor_readings(self, positions, sensor_range, velocites=None):
+        """
+        positions: position readings for all objects by all sensors
+        velocites: velocity readings for all objects by all sensors
+        """
+        distance_vals = np.concatenate(positions, axis=1)
+
+        # Sensor only reads the closest object
+        min_idx = np.argmin(distance_vals, axis=1)
+
+        # Normalize sensor readings
+        sensor_distance_vals = np.amin(distance_vals, axis=1) / sensor_range
+
+        if velocites is not None:
+            velocity_vals = np.concatenate(velocites, axis=1)
+
+            # Get the velocity reading of the closest object
+            sensor_velocity_vals = velocity_vals[np.arange(self.n_sensors), min_idx]
+
+            return sensor_distance_vals, sensor_velocity_vals
+
+        return sensor_distance_vals
+
     def pursuer_poison_begin_callback(self, arbiter, space, data):
         """
         Called when a collision between a pursuer and a poison occurs.
@@ -583,7 +595,7 @@ class WaterworldBase:
         Called when a collision between a pursuer and an evader occurs.
 
         The counter of the evader increases by 1, if the counter reaches
-        n_coop, then the pursuer catches the evader and gets a reward.
+        n_coop, then, the pursuer catches the evader and gets a reward.
         """
         pursuer_shape, evader_shape = arbiter.shapes
 
@@ -603,7 +615,7 @@ class WaterworldBase:
         """
         Called when a collision between a pursuer and a poison ends.
 
-        If at this moment there are greater or equal then n_coop pursuers
+        If at this moment there are greater or equal than n_coop pursuers
         that collides with this evader, the evader's position gets reset
         and the pursuers involved will be rewarded.
         """
