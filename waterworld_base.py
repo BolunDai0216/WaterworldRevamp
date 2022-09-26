@@ -109,6 +109,9 @@ class WaterworldBase:
         return [seed]
 
     def add_obj(self):
+        """
+        Create all moving object instances.
+        """
         self.pursuers = []
         self.evaders = []
         self.poisons = []
@@ -188,11 +191,15 @@ class WaterworldBase:
 
     def _generate_coord(self, radius):
         """
+        Generates a random coordinate for an object with given
+        radius such that it does not collide with an obstacle.
+
         radius: radius of the object
         """
+        # Sample random coordinate (x, y) with x, y ∈ [0, pixel_scale]
         coord = self.np_random.rand(2) * self.pixel_scale
 
-        # Create random coordinate that avoids obstacles
+        # If too close to obstacles, resample
         for obstacle in self.obstacles:
             x, y = obstacle.body.position
             while (
@@ -204,11 +211,17 @@ class WaterworldBase:
         return coord
 
     def _generate_speed(self, speed):
+        """
+        Generates random speed (vx, vy) with vx, vy ∈ [-speed, speed].
+        """
         _speed = (self.np_random.rand(2) - 0.5) * 2 * speed
 
         return _speed[0], _speed[1]
 
     def add(self):
+        """
+        Add all moving objects to PyMunk space.
+        """
         self.space = pymunk.Space()
 
         for obj_list in [self.pursuers, self.evaders, self.poisons, self.obstacles]:
@@ -216,7 +229,24 @@ class WaterworldBase:
                 obj.add(self.space)
 
     def add_bounding_box(self):
-        # Bounding Box
+        """
+        Create bounding boxes around the window so that the moving object will
+        not escape the view window. The four bounding boxes are aligned in the
+        following way:
+
+        (-100, WINDOWSIZE + 100) ┌────┬────────────────────────────┬────┐ (WINDOWSIZE + 100, WINDOWSIZE + 100)
+                                 │xxxx│////////////////////////////│xxxx│
+                                 ├────┼────────────────────────────┼────┤
+                                 │////│    (WINDOWSIZE, WINDOWSIZE)│////│
+                                 │////│                            │////│
+                                 │////│(0, 0)                      │////│
+                                 ├────┼────────────────────────────┼────┤
+                                 │xxxx│////////////////////////////│xxxx│
+                    (-100, -100) └────┴────────────────────────────┴────┘ (WINDOWSIZE + 100, -100)
+
+        where "x" represents overlapped regions.
+        """
+        # Bounding dox edges
         pts = [
             (-100, -100),
             (self.pixel_scale + 100, -100),
@@ -234,6 +264,9 @@ class WaterworldBase:
             self.space.add(self.barriers[-1])
 
     def draw(self):
+        """
+        Draw all moving objects and obstacles in PyGame.
+        """
         for obj_list in [self.pursuers, self.evaders, self.poisons, self.obstacles]:
             for obj in obj_list:
                 obj.draw(self.display, self.convert_coordinates)
@@ -249,6 +282,7 @@ class WaterworldBase:
                         )
                     )
 
+        # Collision callback functions for pursuers v.s. evaders & poisons
         for i in range(self.n_pursuers):
             for j in range(self.n_evaders):
                 idx = i * (self.n_evaders + self.n_poisons) + j
