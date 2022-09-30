@@ -1,6 +1,6 @@
 import math
-import random
-from pdb import set_trace
+# import random
+# from pdb import set_trace
 
 import numpy as np
 import pygame
@@ -10,6 +10,7 @@ from scipy.spatial import distance as ssd
 
 from waterworld_models import Evaders, Obstacle, Poisons, Pursuers
 
+FPS = 15
 
 class WaterworldBase:
     def __init__(
@@ -34,6 +35,7 @@ class WaterworldBase:
         local_ratio=1.0,
         speed_features=True,
         max_cycles=500,
+        FPS=FPS,
     ):
         """
         ╭──────────────────────────────────────────────────────────────────────────────────────────────────────╮
@@ -62,7 +64,7 @@ class WaterworldBase:
         """
         self.pixel_scale = 30 * 25
         self.clock = pygame.time.Clock()
-        self.FPS = 15  # Frames Per Second
+        self.FPS = FPS  # Frames Per Second
 
         self.handlers = []
 
@@ -108,6 +110,9 @@ class WaterworldBase:
 
         self.seed()
         self.add_obj()
+
+        self.observation_space = [pursuer.observation_space for pursuer in self.pursuers]
+        self.action_space = [pursuer.action_space for pursuer in self.pursuers]
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
