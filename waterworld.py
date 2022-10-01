@@ -1,11 +1,10 @@
 import numpy as np
-
 from pettingzoo import AECEnv
 from pettingzoo.utils import agent_selector, wrappers
 from pettingzoo.utils.conversions import parallel_wrapper_fn
 
-from .waterworld_base import FPS
-from .waterworld_base import WaterworldBase as _env
+from waterworld_base import FPS
+from waterworld_base import WaterworldBase as _env
 
 
 def env(**kwargs):
@@ -21,10 +20,10 @@ parallel_env = parallel_wrapper_fn(env)
 class raw_env(AECEnv):
 
     metadata = {
-        'render_modes': ['human', "rgb_array"],
-        'name': 'waterworld_v3',
-        'is_parallelizable': True,
-        'render_fps': FPS,
+        "render_modes": ["human", "rgb_array"],
+        "name": "waterworld_v3",
+        "is_parallelizable": True,
+        "render_fps": FPS,
     }
 
     def __init__(self, *args, **kwargs):
@@ -33,7 +32,9 @@ class raw_env(AECEnv):
 
         self.agents = ["pursuer_" + str(r) for r in range(self.env.n_pursuers)]
         self.possible_agents = self.agents[:]
-        self.agent_name_mapping = dict(zip(self.agents, list(range(self.env.n_pursuers))))
+        self.agent_name_mapping = dict(
+            zip(self.agents, list(range(self.env.n_pursuers)))
+        )
         self._agent_selector = agent_selector(self.agents)
         # spaces
         self.action_spaces = dict(zip(self.agents, self.env.action_space))

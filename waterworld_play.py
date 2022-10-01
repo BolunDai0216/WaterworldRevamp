@@ -1,11 +1,15 @@
 import numpy as np
 
+from waterworld import env as Waterworld
 from waterworld_base import WaterworldBase
 
 
 def main():
     base = WaterworldBase(obstacle_coord=None)
     base.reset()
+
+    # env = Waterworld()
+    # env.reset()
 
     for j in range(1000):
         obs = base.render(mode="human")

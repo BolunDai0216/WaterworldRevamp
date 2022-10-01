@@ -1,6 +1,7 @@
 import math
+
 # import random
-# from pdb import set_trace
+from pdb import set_trace
 
 import numpy as np
 import pygame
@@ -12,13 +13,14 @@ from waterworld_models import Evaders, Obstacle, Poisons, Pursuers
 
 FPS = 15
 
+
 class WaterworldBase:
     def __init__(
         self,
         n_pursuers=5,
         n_evaders=5,
         n_poisons=10,
-        n_obstacles=2,
+        n_obstacles=1,
         n_coop=1,
         n_sensors=30,
         sensor_range=0.2,
@@ -111,7 +113,9 @@ class WaterworldBase:
         self.seed()
         self.add_obj()
 
-        self.observation_space = [pursuer.observation_space for pursuer in self.pursuers]
+        self.observation_space = [
+            pursuer.observation_space for pursuer in self.pursuers
+        ]
         self.action_space = [pursuer.action_space for pursuer in self.pursuers]
 
     def seed(self, seed=None):
@@ -212,7 +216,7 @@ class WaterworldBase:
         radius: radius of the object
         """
         # Sample random coordinate (x, y) with x, y ∈ [0, pixel_scale]
-        coord = self.np_random.rand(2) * self.pixel_scale
+        coord = self.np_random.random(2) * self.pixel_scale
 
         # If too close to obstacles, resample
         for obstacle in self.obstacles:
@@ -221,7 +225,7 @@ class WaterworldBase:
                 ssd.cdist(coord[None, :], np.array([[x, y]]))
                 <= radius * 2 + obstacle.radius
             ):
-                coord = self.np_random.rand(2)
+                coord = self.np_random.random(2)
 
         return coord
 
@@ -229,7 +233,7 @@ class WaterworldBase:
         """
         Generates random speed (vx, vy) with vx, vy ∈ [-speed, speed].
         """
-        _speed = (self.np_random.rand(2) - 0.5) * 2 * speed
+        _speed = (self.np_random.random(2) - 0.5) * 2 * speed
 
         return _speed[0], _speed[1]
 
@@ -361,7 +365,7 @@ class WaterworldBase:
         if self.initial_obstacle_coord is None:
             for i, obstacle in enumerate(self.obstacles):
                 obstacle_position = (
-                    self.np_random.rand(self.n_obstacles, 2) * self.pixel_scale
+                    self.np_random.random((self.n_obstacles, 2)) * self.pixel_scale
                 )
                 obstacle.body.position = (
                     obstacle_position[0, 0],
