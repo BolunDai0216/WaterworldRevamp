@@ -78,8 +78,8 @@ class raw_env(AECEnv):
         ):
             self._was_dead_step(action)
             return
-        agent = self.agent_selection
 
+        agent = self.agent_selection
         is_last = self._agent_selector.is_last()
         self.env.step(action, self.agent_name_mapping[agent], is_last)
 
@@ -93,6 +93,7 @@ class raw_env(AECEnv):
             self.truncations = dict(zip(self.agents, [True for _ in self.agents]))
         else:
             self.terminations = dict(zip(self.agents, self.env.last_dones))
+
         self._cumulative_rewards[self.agent_selection] = 0
         self.agent_selection = self._agent_selector.next()
         self._accumulate_rewards()
