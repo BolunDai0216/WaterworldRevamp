@@ -113,6 +113,7 @@ class WaterworldBase:
         self.seed()
         self.add_obj()
 
+        self.num_agents = self.n_pursuers
         self.observation_space = [
             pursuer.observation_space for pursuer in self.pursuers
         ]

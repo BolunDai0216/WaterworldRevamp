@@ -1,29 +1,17 @@
 import numpy as np
 
 from waterworld import env as Waterworld
-from waterworld_base import WaterworldBase
 
 
 def main():
-    base = WaterworldBase(obstacle_coord=None)
-    base.reset()
+    env = Waterworld()
+    env.reset()
 
-    # env = Waterworld()
-    # env.reset()
-
-    for j in range(1000):
-        obs = base.render(mode="human")
-
-        for i, p in enumerate(base.pursuers):
-            if i == 4:
-                islast = True
-            else:
-                islast = False
-
-            action = 1000 * (2 * np.random.random(2) - 1)
-            base.step(action, i, islast)
-
-    base.close()
+    for agent in env.agent_iter():
+        observation, reward, termination, truncation, info = env.last()
+        action = 0.005 * (2 * np.random.random(2) - 1)
+        env.step(action)
+        env.render()
 
 
 if __name__ == "__main__":
