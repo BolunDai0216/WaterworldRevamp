@@ -1,4 +1,5 @@
 import math
+from pdb import set_trace
 
 import gym
 import numpy as np
@@ -15,7 +16,7 @@ FPS = 15
 class WaterworldBase:
     def __init__(
         self,
-        n_pursuers=5,
+        n_pursuers=2,
         n_evaders=5,
         n_poisons=10,
         n_obstacles=1,
@@ -575,7 +576,7 @@ class WaterworldBase:
         min_idx = np.argmin(distance_vals, axis=1)
 
         # Normalize sensor readings
-        sensor_distance_vals = np.amin(distance_vals, axis=1) / sensor_range
+        sensor_distance_vals = np.amin(distance_vals, axis=1)
 
         if velocites is not None:
             velocity_vals = np.concatenate(velocites, axis=1)

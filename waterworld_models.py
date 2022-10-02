@@ -1,4 +1,5 @@
 import random
+from pdb import set_trace
 
 import numpy as np
 import pygame
@@ -256,6 +257,7 @@ class Pursuers(MovingObject):
         not_sensed_idx = wrong_direction_idx | out_of_range_idx | no_intersection_idx
 
         # Set not sensed sensor readings of position to sensor range
+        sensor_distances = np.clip(sensor_distances / self.sensor_range, 0, 1)
         sensor_distances[not_sensed_idx] = 1.0
 
         # Set not sensed sensor readings of velocity to zero
