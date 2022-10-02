@@ -3,6 +3,7 @@ import math
 # import random
 from pdb import set_trace
 
+import gym
 import numpy as np
 import pygame
 import pymunk
@@ -37,6 +38,7 @@ class WaterworldBase:
         local_ratio=1.0,
         speed_features=True,
         max_cycles=500,
+        render_mode=None,
         FPS=FPS,
     ):
         """
@@ -108,6 +110,8 @@ class WaterworldBase:
         else:
             self.initial_obstacle_coord = obstacle_coord
 
+        self.render_mode = render_mode
+        self.renderOn = False
         self.frames = 0
 
         self.seed()
@@ -661,10 +665,15 @@ class WaterworldBase:
         return False
 
     def render(self, mode="human"):
-        if not self.renderOn:
-            pygame.init()
+        if self.render_mode is None:
+            gym.logger.WARN(
+                "You are calling render method without specifying any render mode."
+            )
+            return
 
-            if mode == "human":
+        if not self.renderOn:
+            if self.render_mode == "human":
+                pygame.init()
                 self.display = pygame.display.set_mode(
                     (self.pixel_scale, self.pixel_scale)
                 )
@@ -681,10 +690,10 @@ class WaterworldBase:
         new_observation = np.copy(observation)
         del observation
 
-        if mode == "human":
-            pygame.display.update()
+        if self.render_mode == "human":
+            pygame.display.flip()
         return (
             np.transpose(new_observation, axes=(1, 0, 2))
-            if mode == "rgb_array"
+            if self.render_mode == "rgb_array"
             else None
         )
