@@ -29,4 +29,42 @@ ratios = np.divide(
 )
 ```
 
-The `out` argument initializes the output array with all ones, and the `where` argument acts like a mask. If `(np.abs(sensor_vectors) > 1e-8)[i, j] = True`, the output array at that position would be the result of `clipped_vectors[i, j] / sensor_vectors[i, j]`. If `where[i, j] = False`, then the output at that position would be `np.ones_like(clipped_vectors)[i, j]`. This is used to take care of the situations where `x_sensor_vector = 0` or `y_sensor_vector = 0`.
+The `out` argument initializes the output array with all ones, and the `where` argument acts like a mask. If `(np.abs(sensor_vectors) > 1e-8)[i, j] = True`, the output array at that position would contain the result of `clipped_vectors[i, j] / sensor_vectors[i, j]`. If `where[i, j] = False`, then the output at that position would contain `np.ones_like(clipped_vectors)[i, j]`. This is used to take care of situations when `x_sensor_vector = 0` or `y_sensor_vector = 0`.
+
+
+## Object Sensor Mechanism
+
+![object sensor mechanism](imgs/sensor_object.png)
+
+The `distance_vec` is computed as
+
+$$\texttt{pursuerPosition} + \texttt{distanceVec} = \texttt{objectPosition}.$$
+
+The `relative_speed` is computed as
+
+$$\texttt{pursuerSpeed} + \texttt{relativeSpeed} = \texttt{objectSpeed}.$$
+
+The projection of `distance_vec` along a `sensor_vector` can be computed as
+
+$$\texttt{sensorDistance} = \texttt{distanceVec}^T\texttt{sensorVector}.$$
+
+The projection of `relative_speed` along a `sensor_vector` can be computed as
+
+$$\texttt{sensorVelocity} = \texttt{relativeSpeed}^T\texttt{sensorVector}.$$
+
+Then, a mask is applied over all the sensed values to determine whether the object can be sensed by a sensor or not. The are three conditions for the object to satisfy to be sensed:
+
+- all the sensors are unidirectional, thus, `distance_vec` must be positive to be sensed, i.e.,
+
+$$\texttt{sensorDistance} > 0$$
+
+- all the sensors have a fixed range, the object must be within the sensor range to be sensed, i.e.,
+
+$$\texttt{sensorDistance} \leq \texttt{objectRadius} + \texttt{sensorRange}$$
+
+- the sensor can only sense objects that intersect with the sensor antenae, thus, the length of the dashed green line must be less than the object radius, i.e.,
+
+$$\texttt{distanceVec}^T\texttt{distanceVec} - \texttt{sensorDistance}^2 \leq \texttt{objectRadius}^2$$
+
+
+

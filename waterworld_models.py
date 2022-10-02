@@ -176,6 +176,12 @@ class Pursuers(MovingObject):
         pygame.draw.circle(display, self.color, self.center, self.radius)
 
     def get_sensor_barrier_readings(self):
+        """
+        Get the distance to the barrier.
+        See https://github.com/BolunDai0216/WaterworldRevamp for
+        a detailed explanation.
+        """
+        # Get the endpoint position of each sensor
         sensor_vectors = self._sensors * self.sensor_range
         position_vec = np.array([self.body.position.x, self.body.position.y])
         sensor_endpoints = position_vec + sensor_vectors
@@ -200,7 +206,7 @@ class Pursuers(MovingObject):
         minimum_ratios = np.amin(ratios, axis=1)
 
         # Convert to 2d array of size (n_sensors, 1)
-        sensor_values = np.expand_dims(minimum_ratios, 0)
+        sensor_values = np.sqrt(2) * np.expand_dims(minimum_ratios, 0)
 
         # Set values beyond sensor range to infinity
         does_sense = minimum_ratios < (1.0 - 1e-4)
@@ -213,6 +219,10 @@ class Pursuers(MovingObject):
         return sensor_values[0, :]
 
     def get_sensor_reading(self, object_coord, object_radius, object_velocity):
+        """
+        Get distance and velocity to another
+        object (Obstacle, Pursuer, Evader, Poison).
+        """
         # Get location and velocity of pursuer
         self.center = self.body.position
         _velocity = self.body.velocity
@@ -246,7 +256,7 @@ class Pursuers(MovingObject):
         not_sensed_idx = wrong_direction_idx | out_of_range_idx | no_intersection_idx
 
         # Set not sensed sensor readings of position to sensor range
-        sensor_distances[not_sensed_idx] = self.sensor_range
+        sensor_distances[not_sensed_idx] = 1.0
 
         # Set not sensed sensor readings of velocity to zero
         sensor_velocities[not_sensed_idx] = 0.0
