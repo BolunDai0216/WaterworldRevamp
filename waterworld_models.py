@@ -94,6 +94,7 @@ class Pursuers(MovingObject):
         x,
         y,
         max_accel,
+        pursuer_speed,
         radius=0.015,
         n_sensors=30,
         sensor_range=0.2,
@@ -108,6 +109,7 @@ class Pursuers(MovingObject):
         self.n_sensors = n_sensors
         self.sensor_range = sensor_range * self.pixel_scale
         self.max_accel = max_accel
+        self.max_speed = pursuer_speed
 
         self.shape.food_indicator = 0  # 1 if food caught at this step, 0 otherwise
         self.shape.food_touched_indicator = (
@@ -207,7 +209,7 @@ class Pursuers(MovingObject):
         minimum_ratios = np.amin(ratios, axis=1)
 
         # Convert to 2d array of size (n_sensors, 1)
-        sensor_values = np.sqrt(2) * np.expand_dims(minimum_ratios, 0)
+        sensor_values = np.expand_dims(minimum_ratios, 0)
 
         # Set values beyond sensor range to infinity
         does_sense = minimum_ratios < (1.0 - 1e-4)
@@ -219,7 +221,9 @@ class Pursuers(MovingObject):
 
         return sensor_values[0, :]
 
-    def get_sensor_reading(self, object_coord, object_radius, object_velocity):
+    def get_sensor_reading(
+        self, object_coord, object_radius, object_velocity, object_max_velocity
+    ):
         """
         Get distance and velocity to another
         object (Obstacle, Pursuer, Evader, Poison).
@@ -246,7 +250,9 @@ class Pursuers(MovingObject):
         sensor_distances = self._sensors @ distance_vec
 
         # Project velocity vector to sensor vectors
-        sensor_velocities = self._sensors @ relative_speed
+        sensor_velocities = (
+            self._sensors @ relative_speed / (object_max_velocity + self.max_speed)
+        )
 
         # Check for valid detection criterions
         wrong_direction_idx = sensor_distances < 0
