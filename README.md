@@ -10,13 +10,13 @@ This repo contains the original code for my version of the waterworld environmen
 
 ![barrier sensor mechanism](imgs/sensor_barrier.png)
 
-In the above image, the `clipped_vector` is only clipped along the `y` axis, thus the `clipped_endpoint` is at `(x_sensor_vector, y_clipped_vector)`, while the `sensor_endpoint` is at `(x_sensor_vector, y_sensor_vector)`. We can see that the intersection point with the barrier along the `sensor` is at
+In the above image, the `clipped_vector` is only clipped along the `y` axis, thus the `clipped_endpoint` is at `(xSensorVector, yClippedVector)`, while the `sensor_endpoint` is at `(xSensorVector, ySensorVector)`. We can see that the intersection point with the barrier along the `sensor` is at
 
-$$\Bigg[\Bigg(\frac{\texttt{y\_clipped\_vector}}{\texttt{y\_sensor\_vector}}\Bigg)\cdot\texttt{x\_sensor\_vector}, \Bigg(\frac{\texttt{y\_clipped\_vector}}{\texttt{y\_sensor\_vector}}\Bigg)\cdot\texttt{y\_sensor\_vector}\Bigg].$$
+$$\Bigg[\Bigg(\frac{\texttt{yClippedVector}}{\texttt{ySensorVector}}\Bigg)\cdot\texttt{xSensorVector}, \Bigg(\frac{\texttt{yClippedVector}}{\texttt{ySensorVector}}\Bigg)\cdot\texttt{ySensorVector}\Bigg].$$
 
 Since the sensor readings for the barrier distance is between $[0, \sqrt{2}]$, we can get the sensor readings as
 
-$$\Bigg(\frac{\texttt{y\_clipped\_vector}}{\texttt{y\_sensor\_vector}}\Bigg)\cdot\sqrt{2}.$$
+$$\Bigg(\frac{\texttt{yClippedVector}}{\texttt{ySensorVector}}\Bigg)\cdot\sqrt{2}.$$
 
 See `waterworld_base.Pursuers.get_sensor_barrier_readings` for the implementation details. One place that needs further explantation is 
 
