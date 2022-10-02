@@ -1,8 +1,5 @@
 import math
 
-# import random
-from pdb import set_trace
-
 import gym
 import numpy as np
 import pygame
@@ -449,7 +446,7 @@ class WaterworldBase:
             local_reward = rewards
             global_reward = local_reward.mean()
 
-            # # Distribute local and global rewards according to local_ratio
+            # Distribute local and global rewards according to local_ratio
             self.last_rewards = local_reward * self.local_ratio + global_reward * (
                 1 - self.local_ratio
             )
@@ -664,7 +661,7 @@ class WaterworldBase:
         """
         return False
 
-    def render(self, mode="human"):
+    def render(self):
         if self.render_mode is None:
             gym.logger.WARN(
                 "You are calling render method without specifying any render mode."
